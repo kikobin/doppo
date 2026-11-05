@@ -6,6 +6,8 @@
 //  • кнопку «Мой поток» в нижнем плеере (рядом с очередью, текстом и т.д.);
 //  • пункт «Запустить поток с этого трека» в контекстном меню трека;
 //  • подменю «doppo» в меню профиля с настройками;
+//  • маскот «Дымок» живёт в dymok.js (второе расширение из комплекта);
+//  • открывает текст doppo вместо родного экрана текста Spotify (отключаемо);
 //  • (по желанию) открывает «Мой поток» при запуске.
 //
 // Настройки лежат в localStorage["doppo:settings"] — их же читает приложение.
@@ -39,6 +41,10 @@
         openOnStart: "Открывать «Мой поток» при запуске",
         smoke: "Дымка в «Моём потоке»",
         playbar: "Кнопка «Мой поток» в плеере",
+        lyrics: "Текст doppo вместо родного",
+        dymok: "Маскот в плеере",
+        pages: "«Мне нравится» в стиле doppo",
+        canvas: "Видео Canvas на фоне",
       }
     : {
         flow: "My Flow",
@@ -49,10 +55,14 @@
         openOnStart: "Open My Flow on start",
         smoke: "Smoke in My Flow",
         playbar: "My Flow button in player",
+        lyrics: "doppo lyrics instead of native",
+        dymok: "Mascot in player",
+        pages: "doppo Liked Songs page",
+        canvas: "Canvas video background",
       };
 
   /* ---------------- настройки ---------------- */
-  const DEFAULTS = { nav: true, openOnStart: false, smoke: true, playbar: true };
+  const DEFAULTS = { nav: true, openOnStart: false, smoke: true, playbar: true, lyrics: true, dymok: false, canvas: true, pages: true };
   function load() {
     try {
       return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || "{}"));
@@ -112,7 +122,7 @@
   const ITEMS = [
     { label: T.flow, path: ROUTE, icon: ICONS.flow },
     { label: T.search, path: "/search", icon: ICONS.search },
-    { label: T.collection, path: "/collection", icon: ICONS.collection },
+    { label: T.collection, path: ROUTE + "/collection", icon: ICONS.collection, also: [ROUTE + "/liked", "/collection"] },
   ];
 
   const nav = document.createElement("div");
@@ -128,6 +138,7 @@
     const btn = document.createElement("button");
     btn.className = "doppo-nav__item";
     btn.dataset.path = item.path;
+    btn.dataset.also = (item.also || []).join("|");
     btn.title = item.label;
     btn.innerHTML = item.icon + '<span class="doppo-nav__label">' + item.label + "</span>";
     btn.addEventListener("click", () => History.push(item.path));
@@ -160,8 +171,11 @@
   function highlight(location) {
     const path = (location && location.pathname) || "/";
     nav.querySelectorAll(".doppo-nav__item").forEach((btn) => {
-      const p = btn.dataset.path;
-      btn.classList.toggle("is-active", path === p || path.startsWith(p + "/"));
+      const paths = [btn.dataset.path].concat(btn.dataset.also ? btn.dataset.also.split("|") : []);
+      const hit = (p) => path === p || path.startsWith(p + "/");
+      // «Мой поток» — только сам поток и текст, не страницы коллекции
+      const active = btn.dataset.path === ROUTE ? path === ROUTE || hit(ROUTE + "/lyrics") : paths.some(hit);
+      btn.classList.toggle("is-active", active);
     });
     document.body.classList.toggle("doppo-route-flow", path === ROUTE || path.startsWith(ROUTE + "/"));
     if (playbarBtn) playbarBtn.active = path === ROUTE || path.startsWith(ROUTE + "/");
@@ -205,6 +219,22 @@
       save({ smoke: !settings.smoke });
       self.setState(settings.smoke);
     }),
+    dymok: new Spicetify.Menu.Item(T.dymok, settings.dymok, (self) => {
+      save({ dymok: !settings.dymok });
+      self.setState(settings.dymok);
+    }),
+    canvas: new Spicetify.Menu.Item(T.canvas, settings.canvas, (self) => {
+      save({ canvas: !settings.canvas });
+      self.setState(settings.canvas);
+    }),
+    pages: new Spicetify.Menu.Item(T.pages, settings.pages, (self) => {
+      save({ pages: !settings.pages });
+      self.setState(settings.pages);
+    }),
+    lyrics: new Spicetify.Menu.Item(T.lyrics, settings.lyrics, (self) => {
+      save({ lyrics: !settings.lyrics });
+      self.setState(settings.lyrics);
+    }),
     openOnStart: new Spicetify.Menu.Item(T.openOnStart, settings.openOnStart, (self) => {
       save({ openOnStart: !settings.openOnStart });
       self.setState(settings.openOnStart);
@@ -226,9 +256,25 @@
     }
   }
 
+  // родной экран текста → текст doppo (сам экран Spotify остаётся доступен, если выключить пункт)
+  // и родной «Любимые треки» → «Мне нравится» doppo (кроме перехода по кнопке «Открыть в Spotify»)
+  function redirectLyrics(location) {
+    const path = location && location.pathname;
+    const native = location && location.state && location.state.doppoNative;
+    let to = null;
+    if (settings.lyrics && path === "/lyrics") to = ROUTE + "/lyrics";
+    if (settings.pages && path === "/collection/tracks" && !native) to = ROUTE + "/liked";
+    if (!to) return;
+    setTimeout(() => (History.replace ? History.replace(to) : History.push(to)), 0);
+  }
+
   applySettings();
   highlight(History.location);
-  History.listen(highlight);
+  redirectLyrics(History.location);
+  History.listen((loc) => {
+    highlight(loc);
+    redirectLyrics(loc);
+  });
   // Spotify иногда перерисовывает левую панель — возвращаем блок на место
   setInterval(mountNav, 1500);
 

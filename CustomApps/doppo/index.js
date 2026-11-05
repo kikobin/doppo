@@ -126,8 +126,10 @@ function dfUseProgress(interval) {
 /* Дымка вокруг обложки                                                */
 /* ------------------------------------------------------------------ */
 
-function DFSmoke({ playing, focusY }) {
+function DFSmoke({ playing, focusY, tint }) {
   const ref = dfUseRef(null);
+  const tintRef = dfUseRef(tint);
+  tintRef.current = tint || "255,255,255";
   const playingRef = dfUseRef(playing);
   playingRef.current = playing;
   const focusRef = dfUseRef(focusY);
@@ -162,6 +164,7 @@ function DFSmoke({ playing, focusY }) {
       rot: rnd(0, 6.28),
       spin: rnd(-0.06, 0.06),
       scale: rnd(0.78, 1.18),
+      tinted: Math.random() < 0.45,
     }));
 
     let t = 0;
@@ -171,20 +174,21 @@ function DFSmoke({ playing, focusY }) {
     const frame = (now) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      const pulse = (window.doppoBeat && window.doppoBeat.pulse) || 0;
       speed += ((playingRef.current ? 1 : 0.2) - speed) * 0.02;
-      t += dt * speed;
+      t += dt * speed * (1 + pulse * 0.6);
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, hgt);
 
       const cx = w / 2;
       const cy = hgt * (focusRef.current || 0.5);
-      const R = Math.min(w * 0.42, hgt * 0.36);
+      const R = Math.min(w * 0.42, hgt * 0.36) * (1 + pulse * 0.035);
 
       const glow = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R * 1.6);
-      glow.addColorStop(0, "rgba(255,255,255,0.07)");
-      glow.addColorStop(0.55, "rgba(255,255,255,0.025)");
-      glow.addColorStop(1, "rgba(255,255,255,0)");
+      glow.addColorStop(0, "rgba(" + tintRef.current + ",0.10)");
+      glow.addColorStop(0.55, "rgba(" + tintRef.current + ",0.035)");
+      glow.addColorStop(1, "rgba(" + tintRef.current + ",0)");
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, w, hgt);
 
@@ -206,7 +210,7 @@ function DFSmoke({ playing, focusY }) {
           else ctx.lineTo(x, y);
         }
         ctx.closePath();
-        ctx.strokeStyle = "rgba(255,255,255," + s.alpha + ")";
+        ctx.strokeStyle = "rgba(" + (s.tinted ? tintRef.current : "255,255,255") + "," + (s.tinted ? s.alpha * 1.6 : s.alpha) * (1 + pulse * 0.9) + ")";
         ctx.lineWidth = s.width;
         ctx.stroke();
       }
@@ -238,10 +242,18 @@ const DF_ICONS = {
     "M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.8 4 7.3 4c2 0 3.4 1.1 4.7 2.7C13.3 5.1 14.7 4 16.7 4c3.5 0 5.7 3.6 4.5 7.1-1.7 4.8-9.2 9.4-9.2 9.4z",
   lyrics: "M4 6h16M4 10.5h16M4 15h10M4 19.5h7",
   back: "M15 5l-7 7 7 7",
+  focus: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+  unfocus: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
+  minus: "M6 12h12",
+  plus: "M6 12h12M12 6v12",
+  copy: "M9 9h10v11H9zM5 15V4h10",
+  shuffle: "M3 7h3.5c2 0 3 1 4.2 2.6l2.6 3.8C14.5 15 15.5 17 17.5 17H21M3 17h3.5c1.6 0 2.5-.7 3.4-1.8M13.6 8.8c.9-1.1 1.9-1.8 3.9-1.8H21M18.5 4.5 21 7l-2.5 2.5M18.5 14.5 21 17l-2.5 2.5",
+  search: "M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM15.5 15.5 20 20",
+  clock: "M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16zM12 7.5V12l3 2",
 };
 
 function DFIcon({ name, fill, size }) {
-  const stroke = name === "lyrics" || name === "back" || (name === "heart" && !fill);
+  const stroke = ["lyrics", "back", "focus", "unfocus", "minus", "plus", "copy", "shuffle", "search", "clock"].includes(name) || (name === "heart" && !fill);
   return dfH(
     "svg",
     { viewBox: "0 0 24 24", width: size || 24, height: size || 24, "aria-hidden": true },
@@ -289,36 +301,190 @@ function DFHeart({ liked, onClick }) {
 function dfSeekFromEvent(e, duration) {
   const rect = e.currentTarget.getBoundingClientRect();
   const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-  if (duration) Spicetify.Player.seek(Math.round(frac * duration));
+  if (duration) DFClock.seek(frac * duration);
+}
+
+/* ------------------------------------------------------------------ */
+/* Цвета обложки → CSS-переменные                                      */
+/* ------------------------------------------------------------------ */
+
+const dfColorCache = new Map();
+
+function dfHexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// осветляем слишком тёмные цвета, чтобы дымка и подсветка были видны
+function dfLift(rgb, minL) {
+  const [r, g, b] = rgb;
+  const l = (Math.max(r, g, b) + Math.min(r, g, b)) / 2 / 255;
+  if (l >= minL) return rgb;
+  const k = (minL - l) / (1 - l || 1);
+  return [r + (255 - r) * k, g + (255 - g) * k, b + (255 - b) * k].map(Math.round);
+}
+
+function dfUseCoverColors(uri) {
+  const [colors, setColors] = dfUseState(() => dfColorCache.get(uri) || null);
+  dfUseEffect(() => {
+    if (!uri || !Spicetify.colorExtractor) return;
+    if (dfColorCache.has(uri)) return setColors(dfColorCache.get(uri));
+    let alive = true;
+    Spicetify.colorExtractor(uri)
+      .then((c) => {
+        const glow = dfHexToRgb(c.LIGHT_VIBRANT) || dfHexToRgb(c.VIBRANT) || dfHexToRgb(c.PROMINENT);
+        const deep = dfHexToRgb(c.DARK_VIBRANT) || dfHexToRgb(c.DESATURATED) || dfHexToRgb(c.PROMINENT);
+        if (!glow || !deep) return;
+        const res = { glow: dfLift(glow, 0.62).join(","), deep: deep.join(",") };
+        dfColorCache.set(uri, res);
+        if (alive) setColors(res);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [uri]);
+  return colors;
+}
+
+/* ------------------------------------------------------------------ */
+/* Фон: размытая обложка + дымка                                        */
+/* ------------------------------------------------------------------ */
+
+async function dfFetchCanvas(uri) {
+  const GQL = Spicetify.GraphQL;
+  const def = GQL && GQL.Definitions && GQL.Definitions.canvas;
+  if (!def || !uri || !uri.startsWith("spotify:track:")) return null;
+  try {
+    const res = await GQL.Request(def, { uri });
+    const c = res && res.data && res.data.trackUnion && res.data.trackUnion.canvas;
+    return c && c.url && /\.mp4(\?|$)/.test(c.url) ? c.url : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+const dfCanvasCache = new Map();
+function dfUseCanvas(uri, enabled) {
+  const [url, setUrl] = dfUseState(null);
+  dfUseEffect(() => {
+    setUrl(null);
+    if (!enabled || !uri) return;
+    if (dfCanvasCache.has(uri)) return setUrl(dfCanvasCache.get(uri));
+    let alive = true;
+    dfFetchCanvas(uri).then((u) => {
+      dfCanvasCache.set(uri, u);
+      if (alive) setUrl(u);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [uri, enabled]);
+  return url;
+}
+
+function DFBackdrop({ track, playing, colors, mode, smoke, canvas }) {
+  return dfH(
+    "div",
+    { className: "df-backdrop" + (canvas ? " has-canvas" : "") },
+    track && track.cover ? dfH("div", { className: "df-backdrop__art", key: track.cover, style: { backgroundImage: "url(" + track.cover + ")" } }) : null,
+    canvas ? dfH("video", { className: "df-backdrop__canvas", key: canvas, src: canvas, autoPlay: true, muted: true, loop: true, playsInline: true }) : null,
+    dfH("div", { className: "df-backdrop__shade" }),
+    smoke ? dfH(DFSmoke, { playing, focusY: mode === "lyrics" ? 0.5 : 0.47, tint: colors ? colors.glow : null }) : null,
+    dfH("div", { className: "df-backdrop__grain" })
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* «Дальше в очереди»                                                  */
+/* ------------------------------------------------------------------ */
+
+function dfReadUpNext() {
+  try {
+    const q = Spicetify.Queue && Spicetify.Queue.nextTracks;
+    const next = q && q.find((x) => {
+      const ct = x && (x.contextTrack || x);
+      return ct && ct.uri && ct.uri.startsWith("spotify:track:") && x.provider !== "ad";
+    });
+    if (!next) return null;
+    const ct = next.contextTrack || next;
+    const m = ct.metadata || {};
+    if (!m.title) return null;
+    return {
+      uri: ct.uri,
+      title: m.title,
+      artist: [m.artist_name, m["artist_name:1"]].filter(Boolean).join(", "),
+      cover: dfImg(m.image_url || m.image_large_url || m.image_small_url),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function dfUseUpNext(uri) {
+  const [next, setNext] = dfUseState(dfReadUpNext);
+  dfUseEffect(() => {
+    const read = () => setNext((cur) => {
+      const n = dfReadUpNext();
+      return cur && n && cur.uri === n.uri ? cur : n;
+    });
+    read();
+    const id = setInterval(read, 2500);
+    return () => clearInterval(id);
+  }, [uri]);
+  return next;
+}
+
+function DFUpNext({ next }) {
+  if (!next) return null;
+  return dfH(
+    "button",
+    { className: "df-upnext", key: next.uri, onClick: () => Spicetify.Player.next(), title: "Включить следующий" },
+    next.cover ? dfH("img", { src: next.cover, alt: "" }) : null,
+    dfH(
+      "div",
+      { className: "df-upnext__text" },
+      dfH("small", null, "Дальше"),
+      dfH("b", null, next.title),
+      dfH("span", null, next.artist)
+    )
+  );
 }
 
 /* ------------------------------------------------------------------ */
 /* Экран «Мой поток»                                                   */
 /* ------------------------------------------------------------------ */
 
-function DFFlowView({ np, progress, onLyrics }) {
+function DFFlowView({ np, progress, lyrics, onLyrics }) {
   const t = np.track;
   const pct = t && t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
   const title = t ? t.title : "Мой поток";
   const titleSize = title.length > 26 ? "df-title--s" : title.length > 14 ? "df-title--m" : "";
+  const live = lyrics.status === "ok" && (lyrics.data.kind === "word" || lyrics.data.kind === "line");
 
   return dfH(
     "div",
-    { className: "df-flow" },
+    { className: "df-flow" + (live ? " df-flow--live" : "") },
     dfH("div", { className: "df-badge" }, "Мой поток"),
     dfH("h1", { className: "df-title " + titleSize, title }, title),
     dfH(
       "div",
-      { className: "df-cover" + (np.playing ? " is-playing" : "") },
+      { className: "df-cover" + (np.playing ? " is-playing" : ""), onClick: t ? onLyrics : undefined, title: t ? "Открыть текст" : "" },
       t && t.cover
-        ? dfH("img", { src: t.cover, alt: "", draggable: false })
+        ? dfH("img", { src: t.cover, alt: "", draggable: false, key: t.cover })
         : dfH("div", { className: "df-cover__empty" }, dfH(DFIcon, { name: "play", size: 64 }))
     ),
     dfH("div", { className: "df-album" }, t ? t.album : "Включи что-нибудь — и поток подхватит"),
     dfH(
       "div",
       { className: "df-barrow" },
-      dfH("button", { className: "df-side", title: "Текст песни", onClick: onLyrics, disabled: !t }, dfH(DFIcon, { name: "lyrics", size: 20 })),
+      dfH(
+        "button",
+        { className: "df-side" + (lyrics.status === "ok" ? " has-lyrics" : ""), title: "Текст песни", onClick: onLyrics, disabled: !t },
+        dfH(DFIcon, { name: "lyrics", size: 20 })
+      ),
       dfH(
         "div",
         { className: "df-pill", onClick: (e) => t && dfSeekFromEvent(e, t.duration) },
@@ -327,162 +493,99 @@ function DFFlowView({ np, progress, onLyrics }) {
       ),
       dfH(DFHeart, { liked: np.liked, onClick: np.toggleLike })
     ),
+    live ? dfH(DFLiveLine, { data: lyrics.data, onOpen: onLyrics, key: t.uri }) : null,
     dfH(DFControls, { playing: np.playing, hasTrack: !!t, big: true }),
     t && t.context ? dfH("div", { className: "df-context" }, "Играет из: " + t.context) : null
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Текст песни                                                         */
+/* Экран текста                                                        */
 /* ------------------------------------------------------------------ */
 
-const dfLyricsCache = new Map();
-
-function dfParseLrc(lrc) {
-  const out = [];
-  for (const raw of lrc.split(/\r?\n/)) {
-    const stamps = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
-    if (!stamps.length) continue;
-    const text = raw.replace(/\[[^\]]*\]/g, "").trim();
-    for (const s of stamps) out.push({ time: (Number(s[1]) * 60 + Number(s[2])) * 1000, text });
-  }
-  return out.sort((a, b) => a.time - b.time);
-}
-
-async function dfFetchJson(url) {
-  try {
-    const r = await fetch(url);
-    if (r.ok) return await r.json();
-    if (r.status === 404) return null;
-  } catch (e) {
-    /* CORS/сеть — пробуем через Cosmos */
-  }
-  try {
-    return await Spicetify.CosmosAsync.get(url);
-  } catch (e) {
-    return null;
-  }
-}
-
-function dfFromLrclib(j) {
-  if (!j) return null;
-  if (j.syncedLyrics) return { synced: true, lines: dfParseLrc(j.syncedLyrics), source: "LRCLIB" };
-  if (j.plainLyrics) return { synced: false, lines: j.plainLyrics.split(/\r?\n/).map((text) => ({ time: 0, text })), source: "LRCLIB" };
-  return null;
-}
-
-async function dfGetLyrics(t) {
-  if (!t || !t.uri) return null;
-  if (dfLyricsCache.has(t.uri)) return dfLyricsCache.get(t.uri);
-
-  let result = null;
-  const artist = t.artists[0] || "";
-
-  // 1) LRCLIB — точное совпадение
-  const q = new URLSearchParams({ artist_name: artist, track_name: t.title, album_name: t.album, duration: String(Math.round(t.duration / 1000)) });
-  result = dfFromLrclib(await dfFetchJson("https://lrclib.net/api/get?" + q));
-
-  // 2) LRCLIB — поиск
-  if (!result) {
-    const s = new URLSearchParams({ track_name: t.title, artist_name: artist });
-    const list = await dfFetchJson("https://lrclib.net/api/search?" + s);
-    if (Array.isArray(list) && list.length) result = dfFromLrclib(list.find((x) => x.syncedLyrics) || list[0]);
-  }
-
-  // 3) Встроенный текст Spotify
-  if (!result && t.uri.startsWith("spotify:track:")) {
-    try {
-      const id = t.uri.split(":")[2];
-      const j = await Spicetify.CosmosAsync.get(
-        "https://spclient.wg.spotify.com/color-lyrics/v2/track/" + id + "?format=json&vocalRemoval=false&market=from_token"
-      );
-      const lines = j && j.lyrics && j.lyrics.lines;
-      if (lines && lines.length) {
-        result = {
-          synced: j.lyrics.syncType === "LINE_SYNCED",
-          lines: lines.map((l) => ({ time: Number(l.startTimeMs) || 0, text: l.words === "♪" ? "" : l.words })),
-          source: "Spotify",
-        };
-      }
-    } catch (e) {
-      /* нет текста */
-    }
-  }
-
-  if (result) result.lines = result.lines.filter((l, i, arr) => l.text || (i > 0 && arr[i - 1].text));
-  dfLyricsCache.set(t.uri, result);
-  return result;
-}
-
-function DFLyricsPane({ track, progress }) {
-  const [state, setState] = dfUseState({ status: "loading" });
-  const boxRef = dfUseRef(null);
-  const uri = track && track.uri;
-
-  dfUseEffect(() => {
-    let alive = true;
-    setState({ status: "loading" });
-    dfGetLyrics(track)
-      .then((r) => alive && setState(r && r.lines.length ? { status: "ok", ...r } : { status: "none" }))
-      .catch(() => alive && setState({ status: "none" }));
-    return () => {
-      alive = false;
-    };
-  }, [uri]);
-
-  let active = -1;
-  if (state.status === "ok" && state.synced) {
-    for (let i = 0; i < state.lines.length; i++) {
-      if (state.lines[i].time <= progress + 250) active = i;
-      else break;
-    }
-  }
-
-  dfUseEffect(() => {
-    const box = boxRef.current;
-    if (!box || active < 0) return;
-    const el = box.children[active];
-    if (el) box.scrollTo({ top: el.offsetTop - box.clientHeight * 0.32, behavior: "smooth" });
-  }, [active]);
-
-  if (state.status === "loading") return dfH("div", { className: "df-lyrics__msg" }, "Ищем текст…");
-  if (state.status === "none") return dfH("div", { className: "df-lyrics__msg" }, "Текста для этого трека пока нет");
-
-  return dfH(
-    dfReact.Fragment,
-    null,
-    dfH(
+function DFLyricsPanel({ track, lyrics, focus }) {
+  if (lyrics.status === "loading") {
+    return dfH(
       "div",
-      { className: "df-lyrics__lines" + (state.synced ? "" : " is-plain"), ref: boxRef },
-      state.lines.map((l, i) =>
-        dfH(
-          "div",
-          {
-            key: i,
-            className: "df-line" + (i === active ? " is-active" : i < active ? " is-past" : ""),
-            onClick: state.synced ? () => Spicetify.Player.seek(Math.max(1, l.time)) : undefined,
-          },
-          l.text || "♪"
-        )
-      )
-    ),
-    dfH("div", { className: "df-lyrics__src" }, "Текст · " + state.source)
-  );
+      { className: "dfk-skeleton" },
+      [92, 70, 84, 56, 76].map((w, i) => dfH("i", { key: i, style: { width: w + "%", animationDelay: i * 0.12 + "s" } }))
+    );
+  }
+  if (lyrics.status === "none") {
+    return dfH(
+      "div",
+      { className: "dfk-empty" },
+      dfH("b", null, "Тут без слов"),
+      dfH("span", null, "Ни Musixmatch, ни Spotify, ни LRCLIB не знают текст этого трека")
+    );
+  }
+  const data = lyrics.data;
+  if (data.kind === "instrumental") {
+    return dfH("div", { className: "dfk-empty" }, dfH("b", null, "♪ Инструментал"), dfH("span", null, "Просто слушай"));
+  }
+  if (data.kind === "plain") return dfH(DFPlainLyrics, { data, key: track.uri });
+  return dfH(DFKaraoke, { data, focus, key: track.uri, onSeek: (ms) => DFClock.seek(ms) });
 }
 
-function DFLyricsView({ np, progress, onBack }) {
+function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
   const t = np.track;
-  if (!t) return dfH(DFFlowView, { np, progress, onLyrics: onBack });
   const pct = t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
+  const [offset, setOffset] = dfUseState(dfLyricsOffset);
+  const bumpOffset = (d) => {
+    const v = Math.round((dfLyricsOffset() + d) * 10) / 10;
+    localStorage.setItem(DF_OFFSET_KEY, String(v));
+    setOffset(v);
+  };
+  dfUseEffect(() => {
+    const onKey = (e) => {
+      if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+      if (e.key === "[") bumpOffset(-100);
+      if (e.key === "]") bumpOffset(100);
+      if ((e.key === "c" || e.key === "с") && !e.metaKey && !e.ctrlKey) copyRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const source = lyrics.status === "ok" ? lyrics.data.source : null;
+  const copyLine = () => {
+    if (lyrics.status !== "ok") return;
+    const lines = lyrics.data.lines.filter((l) => !l.interlude);
+    let line = null;
+    if (lyrics.data.kind === "word" || lyrics.data.kind === "line") {
+      const t0 = DFClock.now() + dfLyricsOffset();
+      const all = lyrics.data.lines;
+      const i = dfFindActive(all, t0);
+      line = all.slice(0, i + 1).reverse().find((l) => !l.interlude) || lines[0];
+    }
+    const text = line ? line.text : lines.map((l) => l.text).join("\n");
+    const id = (t.uri || "").split(":")[2];
+    const payload = "«" + text.trim() + "»\n— " + t.artists.join(", ") + ", " + t.title + (id ? "\nhttps://open.spotify.com/track/" + id : "");
+    const done = () => Spicetify.showNotification(line ? "Строка скопирована" : "Текст скопирован");
+    const fallback = () => {
+      try {
+        Spicetify.Platform.ClipboardAPI.copy(payload);
+        done();
+      } catch (e) {
+        Spicetify.showNotification("Не получилось скопировать", true);
+      }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(payload).then(done, fallback);
+    else fallback();
+  };
+  const copyRef = dfUseRef(copyLine);
+  copyRef.current = copyLine;
+  const kindLabel =
+    lyrics.status === "ok" ? { word: "по словам", line: "по строкам", plain: "без синхронизации", instrumental: "" }[lyrics.data.kind] : "";
 
   return dfH(
     "div",
-    { className: "df-lyrics" },
+    { className: "df-lyrics" + (focus ? " df-lyrics--focus" : "") },
     dfH(
       "div",
       { className: "df-lyrics__left" },
       dfH("button", { className: "df-back", onClick: onBack }, dfH(DFIcon, { name: "back", size: 18 }), "Мой поток"),
-      dfH("div", { className: "df-lcover" }, t.cover ? dfH("img", { src: t.cover, alt: "", draggable: false }) : null),
+      dfH("div", { className: "df-lcover" }, t.cover ? dfH("img", { src: t.cover, alt: "", draggable: false, key: t.cover }) : null),
       dfH(
         "div",
         { className: "df-lmeta" },
@@ -501,10 +604,65 @@ function DFLyricsView({ np, progress, onBack }) {
     dfH(
       "div",
       { className: "df-lyrics__right" },
-      t.context ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, "Играет из"), dfH("b", null, t.context)) : null,
-      dfH(DFLyricsPane, { track: t, progress })
+      dfH(
+        "div",
+        { className: "df-lyrics__head" },
+        focus
+          ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, t.artists.join(", ")), dfH("b", null, t.title))
+          : t.context
+          ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, "Играет из"), dfH("b", null, t.context))
+          : dfH("div"),
+        dfH(
+          "div",
+          { className: "df-lyrics__tools" },
+          lyrics.status === "ok" && lyrics.data.kind !== "plain" && lyrics.data.kind !== "instrumental"
+            ? dfH(
+                "div",
+                { className: "df-offset", title: "Сдвиг текста — клавиши [ и ]" },
+                dfH("button", { onClick: () => bumpOffset(-100) }, dfH(DFIcon, { name: "minus", size: 14 })),
+                dfH("span", null, (offset > 0 ? "+" : "") + (offset / 1000).toFixed(1) + " с"),
+                dfH("button", { onClick: () => bumpOffset(100) }, dfH(DFIcon, { name: "plus", size: 14 }))
+              )
+            : null,
+          lyrics.status === "ok" && lyrics.data.kind !== "instrumental"
+            ? dfH("button", { className: "df-tool", onClick: copyLine, title: "Скопировать текущую строку со ссылкой на трек (C)" }, dfH(DFIcon, { name: "copy", size: 15 }), "Строка")
+            : null,
+          dfH(
+            "button",
+            { className: "df-tool" + (focus ? " is-on" : ""), onClick: onFocus, title: "Сцена — только текст (F)" },
+            dfH(DFIcon, { name: focus ? "unfocus" : "focus", size: 16 }),
+            focus ? "Обычный вид" : "Сцена"
+          )
+        )
+      ),
+      dfH("div", { className: "df-lyrics__body" }, dfH(DFLyricsPanel, { track: t, lyrics, focus })),
+      source ? dfH("div", { className: "df-lyrics__src" }, "Текст · " + source + (kindLabel ? " · " + kindLabel : "")) : null
     )
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* Дымок на экране потока (сам маскот живёт в dymok.js)                */
+/* ------------------------------------------------------------------ */
+
+function DFDymok({ size }) {
+  const ref = dfUseRef(null);
+  dfUseEffect(() => {
+    let handle = null;
+    let timer = null;
+    const tryMount = () => {
+      if (window.doppoDymok && ref.current) {
+        handle = window.doppoDymok.mount(ref.current, size);
+        timer = setTimeout(() => handle && handle.say("привет! я Дымок"), 900);
+      } else timer = setTimeout(tryMount, 300);
+    };
+    tryMount();
+    return () => {
+      clearTimeout(timer);
+      if (handle) handle.unmount();
+    };
+  }, [size]);
+  return dfH("div", { className: "df-dymok", ref, title: "Дымок — нажми на него" });
 }
 
 /* ------------------------------------------------------------------ */
@@ -513,6 +671,7 @@ function DFLyricsView({ np, progress, onBack }) {
 
 const DF_ROUTE = "/doppo";
 const DF_SETTINGS_KEY = "doppo:settings";
+const DF_FOCUS_KEY = "doppo:lyrics-focus";
 
 function dfSettings() {
   try {
@@ -529,12 +688,43 @@ function dfUseRoute() {
   return path;
 }
 
+// заранее грузим текст следующего трека в очереди
+function dfPrefetchNext() {
+  try {
+    const next = Spicetify.Queue && Spicetify.Queue.nextTracks && Spicetify.Queue.nextTracks[0];
+    const ct = next && (next.contextTrack || next);
+    const m = (ct && ct.metadata) || {};
+    if (!ct || !ct.uri || !ct.uri.startsWith("spotify:track:")) return;
+    DFLyrics.get({
+      uri: ct.uri,
+      title: m.title || "",
+      artists: [m.artist_name, m["artist_name:1"]].filter(Boolean),
+      album: m.album_title || "",
+      duration: Number(m.duration) || 0,
+    });
+  } catch (e) {
+    /* очередь недоступна — не страшно */
+  }
+}
+
 function DoppoFlow() {
   const np = dfUseNowPlaying();
   const path = dfUseRoute();
-  const mode = path.startsWith(DF_ROUTE + "/lyrics") ? "lyrics" : "flow";
-  const progress = dfUseProgress(mode === "lyrics" ? 120 : 400);
+  const mode = path.startsWith(DF_ROUTE + "/lyrics")
+    ? "lyrics"
+    : path.startsWith(DF_ROUTE + "/collection")
+    ? "collection"
+    : path.startsWith(DF_ROUTE + "/liked")
+    ? "liked"
+    : "flow";
+  const isPage = mode === "collection" || mode === "liked";
+  const progress = dfUseProgress(mode === "lyrics" ? 250 : 400);
   const [settings, setSettings] = dfUseState(dfSettings);
+  const [focus, setFocus] = dfUseState(() => localStorage.getItem(DF_FOCUS_KEY) === "1");
+  const lyrics = dfUseLyrics(isPage ? null : np.track);
+  const colors = dfUseCoverColors(np.track && np.track.uri);
+  const upNext = dfUseUpNext(np.track && np.track.uri);
+  const canvas = dfUseCanvas(np.track && np.track.uri, settings.canvas !== false && !isPage);
 
   dfUseEffect(() => {
     const onChange = () => setSettings(dfSettings());
@@ -542,21 +732,54 @@ function DoppoFlow() {
     return () => window.removeEventListener("doppo:settings", onChange);
   }, []);
 
+  dfUseEffect(() => {
+    const id = setTimeout(dfPrefetchNext, 4000);
+    return () => clearTimeout(id);
+  }, [np.track && np.track.uri]);
+
+  const toggleFocus = () =>
+    setFocus((f) => {
+      localStorage.setItem(DF_FOCUS_KEY, f ? "0" : "1");
+      return !f;
+    });
+
+  dfUseEffect(() => {
+    if (mode !== "lyrics") return;
+    const onKey = (e) => {
+      if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+      if (e.key === "f" || e.key === "F" || e.key === "а" || e.key === "А") toggleFocus();
+      if (e.key === "Escape") setFocus(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode]);
+
   const History = Spicetify.Platform.History;
   const toLyrics = () => History.push(DF_ROUTE + "/lyrics");
   const toFlow = () => History.push(DF_ROUTE);
 
+  const style = colors ? { "--df-glow": colors.glow, "--df-deep": colors.deep } : undefined;
+
+  if (isPage) {
+    return dfH(
+      "div",
+      { className: "df-root df-root--page df-root--" + mode, style },
+      mode === "collection" ? dfH(DFCollectionPage, { np }) : dfH(DFLikedPage, { np })
+    );
+  }
+
   return dfH(
     "div",
-    { className: "df-root df-root--" + mode },
-    settings.smoke ? dfH(DFSmoke, { playing: np.playing, focusY: mode === "lyrics" ? 0.45 : 0.5 }) : null,
+    { className: "df-root df-root--" + mode + (focus && mode === "lyrics" ? " df-root--focus" : ""), style },
+    dfH(DFBackdrop, { track: np.track, playing: np.playing, colors, mode, smoke: settings.smoke, canvas }),
     mode === "lyrics" && np.track
-      ? dfH(DFLyricsView, { np, progress, onBack: toFlow })
-      : dfH(DFFlowView, { np, progress, onLyrics: toLyrics })
+      ? dfH(DFLyricsView, { np, progress, lyrics, focus, onBack: toFlow, onFocus: toggleFocus })
+      : dfH(DFFlowView, { np, progress, lyrics, onLyrics: toLyrics }),
+    mode === "flow" ? dfH(DFUpNext, { next: upNext }) : null,
+    mode === "flow" && settings.dymok === true ? dfH(DFDymok, { size: 96 }) : null
   );
 }
 
 function render() {
   return dfH(DoppoFlow, null);
 }
-
