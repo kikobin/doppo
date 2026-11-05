@@ -415,8 +415,8 @@ footer[data-testid="now-playing-bar"] {
 .main-nowPlayingView-contextItemInfo [data-encore-id="type"]:first-child {
   font-weight: 800 !important;
   letter-spacing: -0.035em !important;
-  font-size: 26px !important;
-  line-height: 1.1 !important;
+  font-size: 22px !important;
+  line-height: 1.15 !important;
 }
 .main-nowPlayingView-contextItemInfo .main-trackInfo-artists,
 .main-nowPlayingView-trackInfo .main-trackInfo-artists {

@@ -6,7 +6,6 @@
 //  • кнопку «Мой поток» в нижнем плеере (рядом с очередью, текстом и т.д.);
 //  • пункт «Запустить поток с этого трека» в контекстном меню трека;
 //  • подменю «doppo» в меню профиля с настройками;
-//  • ритм трека для пульсации дымки считает beat.js (второе расширение из комплекта);
 //  • открывает текст doppo вместо родного экрана текста Spotify (отключаемо);
 //  • (по желанию) открывает «Мой поток» при запуске.
 //
@@ -60,7 +59,7 @@
       };
 
   /* ---------------- настройки ---------------- */
-  const DEFAULTS = { nav: true, openOnStart: false, smoke: true, playbar: true, lyrics: true, canvas: true, pages: true };
+  const DEFAULTS = { nav: true, openOnStart: false, smoke: true, playbar: true, lyrics: true, canvas: false, pages: true };
   function load() {
     try {
       return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || "{}"));

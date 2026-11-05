@@ -158,7 +158,6 @@ function DFSmoke({ playing, focusY, tint }) {
     const ctx = canvas.getContext("2d");
     // рисуем в пониженном разрешении: CSS-размытие всё равно смягчает края
     const dpr = 0.6;
-    let releaseBeat = null; // берём ритм лениво: beat.js может загрузиться позже приложения
     let w = 0;
     let hgt = 0;
     let raf = 0;
@@ -200,17 +199,15 @@ function DFSmoke({ playing, focusY, tint }) {
       if (now - last < 32 || !visible || document.hidden) return;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (!releaseBeat && window.doppoBeat && window.doppoBeat.acquire) releaseBeat = window.doppoBeat.acquire();
-      const pulse = (window.doppoBeat && window.doppoBeat.pulse) || 0;
       speed += ((playingRef.current ? 1 : 0.2) - speed) * 0.02;
-      t += dt * speed * (1 + pulse * 0.6);
+      t += dt * speed * 0.8; // медленно и спокойно
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, hgt);
 
       const cx = w / 2;
       const cy = hgt * (focusRef.current || 0.5);
-      const R = Math.min(w * 0.42, hgt * 0.36) * (1 + pulse * 0.035);
+      const R = Math.min(w * 0.42, hgt * 0.36);
 
       const glow = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R * 1.6);
       glow.addColorStop(0, "rgba(" + tintRef.current + ",0.10)");
@@ -235,7 +232,7 @@ function DFSmoke({ playing, focusY, tint }) {
           else ctx.lineTo(x, y);
         }
         ctx.closePath();
-        ctx.strokeStyle = "rgba(" + (s.tinted ? tintRef.current : "255,255,255") + "," + (s.tinted ? s.alpha * 1.6 : s.alpha) * (1 + pulse * 0.9) + ")";
+        ctx.strokeStyle = "rgba(" + (s.tinted ? tintRef.current : "255,255,255") + "," + (s.tinted ? s.alpha * 1.6 : s.alpha) + ")";
         ctx.lineWidth = s.width;
         ctx.stroke();
         // мягкий ореол вместо дорогого shadowBlur
@@ -252,7 +249,6 @@ function DFSmoke({ playing, focusY, tint }) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
-      if (releaseBeat) releaseBeat();
     };
   }, []);
 
@@ -444,8 +440,6 @@ function DFBackdrop({ track, playing, colors, mode, smoke, canvas }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* «Дальше в очереди»                                                  */
-/* ------------------------------------------------------------------ */
 
 function dfReadUpNext() {
   try {
@@ -585,11 +579,10 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
   const pct = t && t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
   const title = t ? t.title : "Мой поток";
   const titleSize = title.length > 26 ? "df-title--s" : title.length > 14 ? "df-title--m" : "";
-  const live = !!t && lyrics.status === "ok" && (lyrics.data.kind === "word" || lyrics.data.kind === "line");
 
   return dfH(
     "div",
-    { className: "df-flow" + (live ? " df-flow--live" : "") },
+    { className: "df-flow" },
     dfH("div", { className: "df-badge" }, "Мой поток"),
     dfH("h1", { className: "df-title " + titleSize, title }, title),
     dfH(
@@ -608,7 +601,7 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
       { className: "df-barrow" },
       dfH(
         "button",
-        { className: "df-side" + (lyrics.status === "ok" ? " has-lyrics" : ""), title: "Текст песни", onClick: onLyrics, disabled: !t },
+        { className: "df-side", title: "Текст песни", onClick: onLyrics, disabled: !t },
         dfH(DFIcon, { name: "lyrics", size: 20 })
       ),
       dfH(
@@ -619,16 +612,7 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
       ),
       dfH(DFHeart, { liked: np.liked, onClick: np.toggleLike })
     ),
-    live ? dfH(DFLiveLine, { data: lyrics.data, onOpen: onLyrics, key: t.uri }) : null,
-    dfH(DFControls, { playing: np.playing, hasTrack: !!t, big: true }),
-    t && t.context
-      ? dfH(
-          "div",
-          { className: "df-context" },
-          "Играет из: ",
-          t.contextUri ? dfH(DFLink, { uri: t.contextUri, title: "Открыть" }, t.context) : t.context
-        )
-      : null
+    dfH(DFControls, { playing: np.playing, hasTrack: !!t, big: true })
   );
 }
 
@@ -795,8 +779,7 @@ function DoppoFlow() {
   focusRef.current = focus;
   const lyrics = dfUseLyrics(isPage ? null : np.track);
   const colors = dfUseCoverColors(np.track && np.track.uri);
-  const upNext = dfUseUpNext(np.track && np.track.uri);
-  const canvas = dfUseCanvas(np.track && np.track.uri, settings.canvas !== false && !isPage);
+  const canvas = dfUseCanvas(np.track && np.track.uri, settings.canvas === true && !isPage);
 
   dfUseEffect(() => {
     const onChange = () => setSettings(dfSettings());
@@ -858,8 +841,7 @@ function DoppoFlow() {
     dfH(DFBackdrop, { track: np.track, playing: np.playing, colors, mode, smoke: settings.smoke, canvas }),
     mode === "lyrics" && np.track
       ? dfH(DFLyricsView, { np, progress, lyrics, focus, onBack: toFlow, onFocus: toggleFocus })
-      : dfH(DFFlowView, { np, progress, lyrics, onLyrics: toLyrics }),
-    mode === "flow" ? dfH(DFUpNext, { next: upNext }) : null
+      : dfH(DFFlowView, { np, progress, lyrics, onLyrics: toLyrics })
   );
 }
 

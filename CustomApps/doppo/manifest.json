@@ -10,7 +10,6 @@
     "library.js"
   ],
   "subfiles_extension": [
-    "extension.js",
-    "beat.js"
+    "extension.js"
   ]
 }

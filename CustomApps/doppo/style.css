@@ -145,11 +145,6 @@
 }
 .df-side:hover, .df-heart:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
 .df-side:disabled { opacity: 0.35; cursor: default; }
-.df-side.has-lyrics { color: #fff; border-color: rgba(var(--df-glow), 0.5); box-shadow: 0 0 22px rgba(var(--df-glow), 0.22); }
-.df-side.has-lyrics::after {
-  content: ""; position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--df-accent); box-shadow: 0 0 8px var(--df-accent);
-}
 .df-heart.is-liked { color: var(--df-heart); border-color: rgba(255, 92, 138, 0.4); }
 .df-heart.is-liked svg { animation: df-pop 0.45s var(--df-ease); }
 .df-heart:active { transform: scale(0.88); }
