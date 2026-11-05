@@ -113,7 +113,7 @@
     logo:
       '<svg viewBox="0 0 34 26" fill="currentColor" aria-hidden="true"><rect x="6" y="1" width="7" height="24" rx="3.5" transform="rotate(28 9.5 13)"/><rect x="19" y="1" width="7" height="24" rx="3.5" transform="rotate(28 22.5 13)"/></svg>',
     flow:
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 1-7.4 4.3"/><path d="M12 7.5a4.5 4.5 0 1 1-4 2.4"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 1-7.4 4.3"/><path d="M12 7.5a4.5 4.5 0 1 1-4 2.4"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>',
     search:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg>',
     collection:
@@ -193,7 +193,8 @@
 
   // назад, если есть куда; иначе — на главную
   function back(fallback) {
-    if (History.length > 1 && History.goBack) History.goBack();
+    const canBack = typeof History.index === "number" ? History.index > 0 : History.length > 1;
+    if (canBack && History.goBack) History.goBack();
     else History.push(fallback || "/");
   }
   function toggleFlow() {

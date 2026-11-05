@@ -23,7 +23,12 @@ Copy-Item -Recurse -Force (Join-Path $PSScriptRoot "CustomApps\doppo") $apps
 spicetify config custom_apps doppo-flow- 2>$null | Out-Null
 spicetify config current_theme Doppo color_scheme doppo inject_css 1 replace_colors 1
 spicetify config custom_apps doppo
+# первая установка или Spotify обновился — нужна свежая резервная копия
 spicetify apply
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Делаю резервную копию Spotify и применяю заново..." -ForegroundColor Yellow
+    spicetify backup apply
+}
 
 Write-Host "Готово! «Мой поток» — иконка в верхней панели и пункт в блоке doppo слева." -ForegroundColor Green
 Write-Host "Настройки — меню профиля → doppo." -ForegroundColor Green

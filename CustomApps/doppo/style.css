@@ -255,24 +255,10 @@
 .df-lyrics .df-controls { margin-top: 8px; }
 
 .df-lyrics__right { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.df-lyrics__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-top: 4px; min-height: 52px; }
 .df-lyrics__ctx { display: flex; flex-direction: column; gap: 2px; min-width: 0; animation: df-rise 0.6s var(--df-ease) both; }
 .df-lyrics__ctx small { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
 .df-lyrics__ctx b { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; color: rgba(255, 255, 255, 0.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .df-lyrics--focus .df-lyrics__ctx b { color: rgba(255, 255, 255, 0.55); }
-.df-lyrics__tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.df-tool, .df-offset {
-  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(20, 20, 23, 0.45); backdrop-filter: blur(12px);
-  color: rgba(255, 255, 255, 0.8); font-weight: 700; font-size: 12px; cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.df-tool:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.df-tool.is-on { background: #fff; color: #000; border-color: #fff; }
-.df-offset { padding: 0 4px; cursor: default; }
-.df-offset span { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
-.df-offset button { all: unset; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
-.df-offset button:hover { background: rgba(255, 255, 255, 0.12); }
 .df-lyrics__body { position: relative; flex: 1; min-height: 0; }
 .df-lyrics__src { padding-top: 8px; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.4); }
 

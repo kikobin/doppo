@@ -16,6 +16,7 @@ const DFLib = (() => {
   };
   const ts = (v) => {
     if (!v) return 0;
+    if (v instanceof Date) return v.getTime();
     if (typeof v === "number") return v < 1e12 ? v * 1000 : v;
     if (typeof v === "string") return Date.parse(v) || Number(v) || 0;
     if (v.isoString) return Date.parse(v.isoString) || 0;
@@ -204,9 +205,11 @@ function dfContextUri() {
   const d = Spicetify.Player.data || {};
   return (d.context && d.context.uri) || d.context_uri || d.contextUri || "";
 }
+function dfIsLikedUri(uri) {
+  return !!uri && /:collection(:|$)|^spotify:collection$/.test(uri) && !/:collection:(your-episodes|artist|album)/.test(uri);
+}
 function dfIsLikedContext() {
-  const uri = dfContextUri();
-  return /:collection(:|$)|^spotify:collection/.test(uri) && !/:collection:(your-episodes|artist|album)/.test(uri);
+  return dfIsLikedUri(dfContextUri());
 }
 
 // «что сейчас должно гореть»: сразу после нажатия показываем нажатое (pending),
@@ -237,14 +240,26 @@ async function dfUsername() {
       const res = await Spicetify.CosmosAsync.get("sp://core-session/v1/username");
       user = res && res.username;
     } catch (e) {
+      /* дальше */
+    }
+  }
+  if (!user) {
+    try {
+      const u = await Spicetify.Platform.UserAPI.getUser();
+      user = u && u.username;
+    } catch (e) {
       /* нет */
     }
   }
-  return user;
+  return user || null;
 }
 
 async function dfPlayLiked(trackUri, shuffle) {
   const user = await dfUsername();
+  if (!user) {
+    if (trackUri) Spicetify.Player.playUri(trackUri);
+    return;
+  }
   const ctx = "spotify:user:" + user + ":collection";
   try {
     if (shuffle !== undefined) Spicetify.Player.setShuffle(!!shuffle);
@@ -301,7 +316,7 @@ function DFEq() {
   return dfH("span", { className: "df-eq", "aria-label": "играет" }, dfH("i"), dfH("i"), dfH("i"));
 }
 
-function DFTrackRow({ t, index, active, playing, onPlay, showAdded, liked, onHeart }) {
+function DFTrackRowView({ t, index, active, playing, onPlay, showAdded, liked, onHeart }) {
   return dfH(
     "div",
     {
@@ -380,7 +395,7 @@ function DFCollectionPage({ np }) {
   const History = Spicetify.Platform.History;
   const playingUri = pend.uri;
   const count = liked ? liked.length : null;
-  const likedCtx = pend.ctx ? /collection/.test(pend.ctx) : false;
+  const likedCtx = dfIsLikedUri(pend.ctx);
   const likedPlaying = pend.playing && likedCtx;
   const playTrack = (t) => {
     if (playingUri === t.uri) {
@@ -432,7 +447,7 @@ function DFCollectionPage({ np }) {
                   pend.set({ ctx: pend.ctx, playing: !pend.playing });
                   Spicetify.Player.togglePlay();
                 } else {
-                  dfUsername().then((u) => playCtx("spotify:user:" + u + ":collection", () => dfPlayLiked(null)));
+                  dfUsername().then((u) => u && playCtx("spotify:user:" + u + ":collection", () => dfPlayLiked(null)));
                 }
               },
             },
@@ -521,7 +536,17 @@ function DFLikedPage({ np }) {
   dfUseEffect(() => {
     const el = sentinel.current;
     if (!el) return;
-    const io = new IntersectionObserver((e) => e[0].isIntersecting && setLimit((l) => l + DF_PAGE_STEP), { rootMargin: "900px" });
+    // Spotify скроллит свой контейнер, а не окно — следим относительно него
+    let root = el.parentElement;
+    while (root && root !== document.body) {
+      const oy = getComputedStyle(root).overflowY;
+      if ((oy === "auto" || oy === "scroll") && root.scrollHeight > root.clientHeight) break;
+      root = root.parentElement;
+    }
+    const io = new IntersectionObserver((e) => e[0].isIntersecting && setLimit((l) => l + DF_PAGE_STEP), {
+      root: root && root !== document.body ? root : null,
+      rootMargin: "900px",
+    });
     io.observe(el);
     return () => io.disconnect();
   }, [all]);
@@ -547,7 +572,7 @@ function DFLikedPage({ np }) {
   const totalMs = dfUseMemoSafe(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
   const pend = dfUsePending(np);
   const playingUri = pend.uri;
-  const likedCtx = pend.ctx ? /collection/.test(pend.ctx) : false;
+  const likedCtx = dfIsLikedUri(pend.ctx);
   const likedPlaying = pend.playing && likedCtx;
   const playTrack = (t) => {
     if (playingUri === t.uri) {
@@ -685,3 +710,9 @@ function DFLikedPage({ np }) {
 function dfUseMemoSafe(fn, deps) {
   return Spicetify.React.useMemo(fn, deps);
 }
+
+// строка перерисовывается только если поменялось то, что в ней видно
+const DFTrackRow = Spicetify.React.memo(
+  DFTrackRowView,
+  (a, b) => a.t === b.t && a.index === b.index && a.active === b.active && a.playing === b.playing && a.liked === b.liked && a.showAdded === b.showAdded
+);

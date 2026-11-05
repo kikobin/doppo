@@ -16,7 +16,11 @@ cp -r "$here/CustomApps/doppo" "$spice_dir/CustomApps/"
 spicetify config custom_apps doppo-flow- >/dev/null 2>&1 || true
 spicetify config current_theme Doppo color_scheme doppo inject_css 1 replace_colors 1
 spicetify config custom_apps doppo
-spicetify apply
+# первая установка или Spotify обновился — нужна свежая резервная копия
+if ! spicetify apply; then
+  echo "Делаю резервную копию Spotify и применяю заново…"
+  spicetify backup apply
+fi
 
 echo "Готово! «Мой поток» — иконка в верхней панели и пункт в блоке doppo слева."
 echo "Настройки — меню профиля → doppo."

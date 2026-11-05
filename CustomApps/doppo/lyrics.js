@@ -31,10 +31,13 @@ const DFClock = (() => {
     at = performance.now();
     playing = Spicetify.Player.isPlaying();
   }
+  let holdUntil = 0;
   function sample() {
     const p = Spicetify.Player.getProgress() || 0;
     const pl = Spicetify.Player.isPlaying();
     const pred = now();
+    // после перемотки Spotify ещё секунду отдаёт старую позицию — не прыгаем назад
+    if (performance.now() < holdUntil && Math.abs(p - pred) > 1000) return;
     if (pl !== playing || Math.abs(p - pred) > 300) {
       base = p;
     } else {
@@ -63,6 +66,7 @@ const DFClock = (() => {
   function seek(ms) {
     Spicetify.Player.seek(Math.max(0, Math.round(ms)));
     hard(ms);
+    holdUntil = performance.now() + 1500;
   }
   return { now, hard, acquire, seek, isPlaying: () => playing };
 })();
@@ -351,14 +355,20 @@ const DFLyrics = (() => {
     });
   }
 
+  const failedAt = new Map();
   function get(t) {
     if (!t || !t.uri) return Promise.resolve(null);
+    // реклама, подкасты и т.п. — без текста и без запросов
+    if (!/^spotify:(track|local):/.test(t.uri)) return Promise.resolve(null);
     if (cache.has(t.uri)) return Promise.resolve(cache.get(t.uri));
+    // неудача (сеть, таймаут) — повторим не раньше чем через 2 минуты
+    if (failedAt.has(t.uri) && Date.now() - failedAt.get(t.uri) < 120000) return Promise.resolve(null);
     if (inflight.has(t.uri)) return inflight.get(t.uri);
     const p = resolve(t)
       .catch(() => null)
       .then((r) => {
-        cache.set(t.uri, r);
+        if (r) cache.set(t.uri, r);
+        else failedAt.set(t.uri, Date.now());
         inflight.delete(t.uri);
         return r;
       });
@@ -377,8 +387,14 @@ const DFLyrics = (() => {
 /* ------------------------------------------------------------------ */
 
 const DF_OFFSET_KEY = "doppo:lyrics-offset";
+let dfOffsetCache = null;
 function dfLyricsOffset() {
-  return Number(localStorage.getItem(DF_OFFSET_KEY) || 0) || 0;
+  if (dfOffsetCache === null) dfOffsetCache = Number(localStorage.getItem(DF_OFFSET_KEY) || 0) || 0;
+  return dfOffsetCache;
+}
+function dfSetLyricsOffset(v) {
+  dfOffsetCache = v;
+  localStorage.setItem(DF_OFFSET_KEY, String(v));
 }
 
 function dfFindActive(lines, t) {
@@ -423,22 +439,23 @@ function dfFill(line, els, t, cache) {
 function dfUseLyrics(track) {
   const R = Spicetify.React;
   const uri = track && track.uri;
-  const [state, setState] = R.useState(() => {
-    const c = uri ? DFLyrics.peek(uri) : undefined;
-    return c === undefined ? { status: "loading" } : c ? { status: "ok", data: c } : { status: "none" };
-  });
+  const fromCache = (u) => {
+    if (!u) return { uri: u, status: "none" };
+    const c = DFLyrics.peek(u);
+    return c === undefined ? { uri: u, status: "loading" } : c ? { uri: u, status: "ok", data: c } : { uri: u, status: "none" };
+  };
+  const [state, setState] = R.useState(() => fromCache(uri));
   R.useEffect(() => {
-    if (!uri) return setState({ status: "none" });
+    setState(fromCache(uri));
+    if (!uri) return;
     let alive = true;
-    const c = DFLyrics.peek(uri);
-    if (c !== undefined) setState(c ? { status: "ok", data: c } : { status: "none" });
-    else setState({ status: "loading" });
-    DFLyrics.get(track).then((r) => alive && setState(r ? { status: "ok", data: r } : { status: "none" }));
+    DFLyrics.get(track).then((r) => alive && setState(r ? { uri, status: "ok", data: r } : { uri, status: "none" }));
     return () => {
       alive = false;
     };
   }, [uri]);
-  return state;
+  // пока эффект не догнал новый трек — не отдаём текст прошлого трека
+  return state.uri === uri ? state : fromCache(uri);
 }
 
 /* ------------------------------------------------------------------ */

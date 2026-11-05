@@ -62,13 +62,10 @@ function dfIsLiked() {
 async function dfStartFlow() {
   // «Мой поток»: перемешанные «Мне нравится»
   try {
-    let user = Spicetify.Platform && Spicetify.Platform.username;
-    if (!user) {
-      const res = await Spicetify.CosmosAsync.get("sp://core-session/v1/username");
-      user = res && res.username;
-    }
+    const user = await dfUsername();
+    if (!user) throw new Error("no user");
+    Spicetify.Player.setShuffle(true); // сначала перемешивание — иначе первым играет самый новый лайк
     await Spicetify.Player.playUri("spotify:user:" + user + ":collection");
-    Spicetify.Player.setShuffle(true);
   } catch (e) {
     Spicetify.Player.play();
   }
@@ -79,6 +76,8 @@ async function dfStartFlow() {
 /* ------------------------------------------------------------------ */
 
 function dfUseNowPlaying() {
+  const likeHold = dfUseRef(0);
+  const dfIsLikedNow = dfUseRef(false);
   const [state, setState] = dfUseState(() => ({
     track: dfReadTrack(),
     playing: Spicetify.Player.isPlaying(),
@@ -94,7 +93,8 @@ function dfUseNowPlaying() {
     // события Spotify приходят не всегда — сверяемся сами (трек, пауза, лайк)
     const id = setInterval(() => {
       setState((s) => {
-        const liked = dfIsLiked();
+        // пару секунд после нажатия на сердце верим себе, а не устаревшему состоянию Spotify
+        const liked = performance.now() < likeHold.current ? s.liked : dfIsLiked();
         const playing = Spicetify.Player.isPlaying();
         const track = dfReadTrack();
         const same = (s.track && s.track.uri) === (track && track.uri);
@@ -109,15 +109,23 @@ function dfUseNowPlaying() {
     };
   }, []);
 
-  const toggleLike = dfUseCallback(() => {
+  const toggleLike = dfUseCallback(async () => {
+    const t = dfReadTrack();
+    if (!t || !t.uri) return;
+    const next = !dfIsLikedNow.current;
+    likeHold.current = performance.now() + 2500;
+    setState((s) => ({ ...s, liked: next }));
     try {
-      Spicetify.Player.toggleHeart();
-      setState((s) => ({ ...s, liked: !s.liked }));
-      setTimeout(() => setState((s) => ({ ...s, liked: dfIsLiked() })), 600);
+      const L = Spicetify.Platform.LibraryAPI;
+      if (L && L.add && L.remove) await (next ? L.add({ uris: [t.uri] }) : L.remove({ uris: [t.uri] }));
+      else Spicetify.Player.setHeart(next);
     } catch (e) {
+      likeHold.current = 0;
+      setState((s) => ({ ...s, liked: !next }));
       Spicetify.showNotification("Не удалось сохранить. Попробуй ещё раз", true);
     }
   }, []);
+  dfIsLikedNow.current = state.liked;
 
   return { ...state, toggleLike };
 }
@@ -125,6 +133,7 @@ function dfUseNowPlaying() {
 function dfUseProgress(interval) {
   const [p, setP] = dfUseState(() => Spicetify.Player.getProgress() || 0);
   dfUseEffect(() => {
+    if (!interval) return; // на страницах коллекции прогресс не нужен — не перерисовываем каждые 400 мс
     const id = setInterval(() => setP(Spicetify.Player.getProgress() || 0), interval);
     return () => clearInterval(id);
   }, [interval]);
@@ -149,7 +158,7 @@ function DFSmoke({ playing, focusY, tint }) {
     const ctx = canvas.getContext("2d");
     // рисуем в пониженном разрешении: CSS-размытие всё равно смягчает края
     const dpr = 0.6;
-    const releaseBeat = window.doppoBeat && window.doppoBeat.acquire ? window.doppoBeat.acquire() : null;
+    let releaseBeat = null; // берём ритм лениво: beat.js может загрузиться позже приложения
     let w = 0;
     let hgt = 0;
     let raf = 0;
@@ -191,6 +200,7 @@ function DFSmoke({ playing, focusY, tint }) {
       if (now - last < 32 || !visible || document.hidden) return;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      if (!releaseBeat && window.doppoBeat && window.doppoBeat.acquire) releaseBeat = window.doppoBeat.acquire();
       const pulse = (window.doppoBeat && window.doppoBeat.pulse) || 0;
       speed += ((playingRef.current ? 1 : 0.2) - speed) * 0.02;
       t += dt * speed * (1 + pulse * 0.6);
@@ -500,6 +510,7 @@ function DFUpNext({ next }) {
 // spotify:album:ID → /album/ID; «Мне нравится» → наша страница
 function dfUriToPath(uri) {
   if (!uri) return null;
+  if (/:collection:your-episodes/.test(uri)) return "/collection/episodes";
   if (/:collection(:|$)|^spotify:collection/.test(uri)) return DF_ROUTE + "/liked";
   const m = /^spotify:(album|artist|playlist|show|episode|track):([A-Za-z0-9]+)$/.exec(uri);
   if (m) return "/" + m[1] + "/" + m[2];
@@ -574,7 +585,7 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
   const pct = t && t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
   const title = t ? t.title : "Мой поток";
   const titleSize = title.length > 26 ? "df-title--s" : title.length > 14 ? "df-title--m" : "";
-  const live = lyrics.status === "ok" && (lyrics.data.kind === "word" || lyrics.data.kind === "line");
+  const live = !!t && lyrics.status === "ok" && (lyrics.data.kind === "word" || lyrics.data.kind === "line");
 
   return dfH(
     "div",
@@ -661,7 +672,7 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
       if (e.target && /input|textarea/i.test(e.target.tagName)) return;
       if (e.key !== "[" && e.key !== "]") return;
       const v = dfLyricsOffset() + (e.key === "]" ? 100 : -100);
-      localStorage.setItem(DF_OFFSET_KEY, String(v));
+      dfSetLyricsOffset(v);
       setOffsetHint((v > 0 ? "+" : "") + (v / 1000).toFixed(1) + " с");
       clearTimeout(hintTimer.current);
       hintTimer.current = setTimeout(() => setOffsetHint(null), 1400);
@@ -777,7 +788,7 @@ function DoppoFlow() {
     ? "liked"
     : "flow";
   const isPage = mode === "collection" || mode === "liked";
-  const progress = dfUseProgress(mode === "lyrics" ? 250 : 400);
+  const progress = dfUseProgress(isPage ? 0 : mode === "lyrics" ? 250 : 400);
   const [settings, setSettings] = dfUseState(dfSettings);
   const [focus, setFocus] = dfUseState(() => localStorage.getItem(DF_FOCUS_KEY) === "1");
   const focusRef = dfUseRef(focus);
