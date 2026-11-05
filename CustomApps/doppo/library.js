@@ -14,8 +14,30 @@ const DFLib = (() => {
     const pick = list.find((i) => i && (i.width || 0) >= 200 && (i.width || 0) <= 700) || list[0];
     return pick ? dfImg(pick.url || pick.uri || "") : "";
   };
+  const ts = (v) => {
+    if (!v) return 0;
+    if (typeof v === "number") return v < 1e12 ? v * 1000 : v;
+    if (typeof v === "string") return Date.parse(v) || Number(v) || 0;
+    if (v.isoString) return Date.parse(v.isoString) || 0;
+    if (v.milliseconds) return Number(v.milliseconds);
+    return 0;
+  };
 
-  function normTrackWeb(it) {
+  function normPlatform(t) {
+    if (!t || !t.uri) return null;
+    return {
+      uri: t.uri,
+      title: t.name,
+      artists: (t.artists || []).map((a) => a.name),
+      album: (t.album && t.album.name) || "",
+      cover: img(t.album && t.album.images),
+      duration: (t.duration && t.duration.milliseconds) || t.duration_ms || 0,
+      addedAt: ts(t.addedAt),
+      explicit: !!t.isExplicit,
+      playable: t.isPlayable !== false,
+    };
+  }
+  function normWeb(it) {
     const t = it.track || it;
     if (!t || !t.uri) return null;
     return {
@@ -25,64 +47,79 @@ const DFLib = (() => {
       album: (t.album && t.album.name) || "",
       cover: img(t.album && t.album.images),
       duration: t.duration_ms || 0,
-      addedAt: it.added_at ? Date.parse(it.added_at) : 0,
+      addedAt: ts(it.added_at),
       explicit: !!t.explicit,
+      playable: t.is_playable !== false,
     };
   }
-  function normTrackPlatform(t) {
-    if (!t || !t.uri) return null;
+
+  // кэш с «ленивым» обновлением: показываем сразу, тихо обновляем в фоне
+  function cached(loader, ttl) {
+    let value = null;
+    let at = 0;
+    let inflight = null;
+    const subs = new Set();
+    function load() {
+      if (inflight) return inflight;
+      inflight = loader()
+        .then((v) => {
+          value = v;
+          at = Date.now();
+          subs.forEach((f) => f(v));
+          return v;
+        })
+        .finally(() => (inflight = null));
+      return inflight;
+    }
     return {
-      uri: t.uri,
-      title: t.name,
-      artists: (t.artists || []).map((a) => a.name),
-      album: (t.album && t.album.name) || "",
-      cover: img(t.album && t.album.images),
-      duration: (t.duration && t.duration.milliseconds) || t.duration_ms || 0,
-      addedAt: t.addedAt ? Date.parse(t.addedAt) || Number(t.addedAt) : 0,
-      explicit: !!t.isExplicit,
+      get() {
+        if (value && Date.now() - at < ttl) return Promise.resolve(value);
+        if (value) {
+          load();
+          return Promise.resolve(value);
+        }
+        return load();
+      },
+      peek: () => value,
+      refresh: load,
+      subscribe(f) {
+        subs.add(f);
+        return () => subs.delete(f);
+      },
+      patch(fn) {
+        if (value) {
+          value = fn(value);
+          subs.forEach((f) => f(value));
+        }
+      },
     };
   }
 
-  async function likedPage(offset, limit) {
+  // Все лайки одним запросом — так делает официальный Shuffle+.
+  async function loadLiked() {
     try {
-      const r = await Spicetify.CosmosAsync.get("https://api.spotify.com/v1/me/tracks?limit=" + limit + "&offset=" + offset);
-      if (r && Array.isArray(r.items)) return { items: r.items.map(normTrackWeb).filter(Boolean), total: r.total || 0 };
+      const r = await Spicetify.Platform.LibraryAPI.getTracks({ limit: 9999999 });
+      const items = ((r && (r.items || r.tracks)) || []).map(normPlatform).filter(Boolean);
+      if (items.length || (r && r.totalLength === 0)) return sortLiked(items);
     } catch (e) {
-      /* дальше — внутренний API */
+      /* внутренний API недоступен — идём в Web API */
     }
-    try {
-      const L = Spicetify.Platform.LibraryAPI;
-      const r = await L.getTracks({ limit, offset, sort: { field: "ADDED_AT", order: "DESC" } });
-      const items = (r && (r.items || r.tracks)) || [];
-      return { items: items.map(normTrackPlatform).filter(Boolean), total: (r && (r.totalLength || r.total)) || items.length };
-    } catch (e) {
-      return { items: [], total: 0, error: true };
+    const out = [];
+    let url = "https://api.spotify.com/v1/me/tracks?limit=50";
+    for (let i = 0; i < 200 && url; i++) {
+      const r = await Spicetify.CosmosAsync.get(url);
+      if (!r || !Array.isArray(r.items)) break;
+      r.items.forEach((it) => {
+        const t = normWeb(it);
+        if (t) out.push(t);
+      });
+      url = r.next;
     }
+    return sortLiked(out);
   }
+  const sortLiked = (items) => (items.some((t) => t.addedAt) ? items.slice().sort((a, b) => b.addedAt - a.addedAt) : items);
 
-  async function playlists() {
-    try {
-      const out = [];
-      let url = "https://api.spotify.com/v1/me/playlists?limit=50";
-      for (let i = 0; i < 4 && url; i++) {
-        const r = await Spicetify.CosmosAsync.get(url);
-        if (!r || !Array.isArray(r.items)) break;
-        r.items.filter(Boolean).forEach((p) =>
-          out.push({
-            uri: p.uri,
-            id: p.id,
-            name: p.name,
-            cover: img(p.images),
-            count: (p.tracks && p.tracks.total) || 0,
-            owner: (p.owner && p.owner.display_name) || "",
-          })
-        );
-        url = r.next;
-      }
-      if (out.length) return out;
-    } catch (e) {
-      /* дальше */
-    }
+  async function loadPlaylists() {
     try {
       const r = await Spicetify.Platform.RootlistAPI.getContents();
       const flat = [];
@@ -90,26 +127,80 @@ const DFLib = (() => {
         (items || []).forEach((x) => {
           if (x.type === "folder") walk(x.items);
           else if (x.type === "playlist")
-            flat.push({ uri: x.uri, id: x.uri.split(":").pop(), name: x.name, cover: img(x.images), count: x.totalLength || 0, owner: (x.owner && x.owner.name) || "" });
+            flat.push({
+              uri: x.uri,
+              id: x.uri.split(":").pop(),
+              name: x.name,
+              cover: img(x.images),
+              count: x.totalLength || 0,
+              owner: (x.owner && (x.owner.name || x.owner.displayName)) || "",
+            });
         });
       walk(r && r.items);
-      return flat;
+      if (flat.length) return flat;
     } catch (e) {
-      return [];
+      /* дальше */
     }
+    const out = [];
+    let url = "https://api.spotify.com/v1/me/playlists?limit=50";
+    for (let i = 0; i < 10 && url; i++) {
+      const r = await Spicetify.CosmosAsync.get(url);
+      if (!r || !Array.isArray(r.items)) break;
+      r.items.filter(Boolean).forEach((p) =>
+        out.push({ uri: p.uri, id: p.id, name: p.name, cover: img(p.images), count: (p.tracks && p.tracks.total) || 0, owner: (p.owner && p.owner.display_name) || "" })
+      );
+      url = r.next;
+    }
+    return out;
   }
 
-  async function me() {
+  async function loadMe() {
+    try {
+      const u = await Spicetify.Platform.UserAPI.getUser();
+      if (u && (u.displayName || u.username)) return { name: u.displayName || u.username, avatar: img(u.images) };
+    } catch (e) {
+      /* дальше */
+    }
     try {
       const r = await Spicetify.CosmosAsync.get("https://api.spotify.com/v1/me");
-      return { name: r.display_name || r.id, avatar: img(r.images), id: r.id };
+      return { name: r.display_name || r.id, avatar: img(r.images) };
     } catch (e) {
-      return { name: (Spicetify.Platform && Spicetify.Platform.username) || "", avatar: "", id: Spicetify.Platform && Spicetify.Platform.username };
+      return { name: (Spicetify.Platform && Spicetify.Platform.username) || "", avatar: "" };
     }
   }
 
-  return { likedPage, playlists, me };
+  const liked = cached(() => loadLiked().catch(() => []), 60 * 1000);
+  const playlists = cached(() => loadPlaylists().catch(() => []), 5 * 60 * 1000);
+  const me = cached(loadMe, 30 * 60 * 1000);
+
+  async function setLiked(uri, on) {
+    const L = Spicetify.Platform.LibraryAPI;
+    if (on) await L.add({ uris: [uri] });
+    else await L.remove({ uris: [uri] });
+  }
+
+  return { liked, playlists, me, setLiked };
 })();
+
+function dfUseCached(store) {
+  const [v, setV] = dfUseState(() => store.peek());
+  dfUseEffect(() => {
+    let alive = true;
+    store.get().then((x) => alive && setV(x));
+    const off = store.subscribe((x) => alive && setV(x));
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
+  return v;
+}
+
+function dfIsLikedContext() {
+  const d = Spicetify.Player.data;
+  const uri = (d && d.context && d.context.uri) || (d && d.context_uri) || "";
+  return /:collection(:|$)/.test(uri);
+}
 
 async function dfUsername() {
   let user = Spicetify.Platform && Spicetify.Platform.username;
@@ -182,11 +273,11 @@ function DFEq() {
   return dfH("span", { className: "df-eq", "aria-label": "играет" }, dfH("i"), dfH("i"), dfH("i"));
 }
 
-function DFTrackRow({ t, index, active, playing, onPlay, showAdded }) {
+function DFTrackRow({ t, index, active, playing, onPlay, showAdded, liked, onHeart }) {
   return dfH(
     "div",
     {
-      className: "df-row" + (active ? " is-active" : ""),
+      className: "df-row" + (active ? " is-active" : "") + (liked === false ? " is-unliked" : "") + (t.playable === false ? " is-disabled" : ""),
       onDoubleClick: onPlay,
       role: "row",
     },
@@ -205,9 +296,42 @@ function DFTrackRow({ t, index, active, playing, onPlay, showAdded }) {
     ),
     dfH("div", { className: "df-row__album" }, t.album),
     showAdded ? dfH("div", { className: "df-row__added" }, dfAgo(t.addedAt)) : null,
-    dfH("div", { className: "df-row__heart" }, dfH(DFIcon, { name: "heart", fill: true, size: 18 })),
+    dfH(
+      "button",
+      {
+        className: "df-row__heart" + (liked === false ? " is-off" : ""),
+        title: liked === false ? "Вернуть в «Мне нравится»" : "Убрать из «Мне нравится»",
+        onClick: onHeart,
+      },
+      dfH(DFIcon, { name: "heart", fill: liked !== false, size: 18 })
+    ),
     dfH("div", { className: "df-row__dur" }, dfTime(t.duration))
   );
+}
+
+function dfUseHearts() {
+  const [off, setOff] = dfUseState(() => new Set());
+  const toggle = (t) => async (e) => {
+    if (e) e.stopPropagation();
+    const nowOn = off.has(t.uri);
+    setOff((cur) => {
+      const n = new Set(cur);
+      nowOn ? n.delete(t.uri) : n.add(t.uri);
+      return n;
+    });
+    try {
+      await DFLib.setLiked(t.uri, nowOn);
+      Spicetify.showNotification(nowOn ? "Снова в «Мне нравится»" : "Убрано из «Мне нравится»");
+    } catch (err) {
+      setOff((cur) => {
+        const n = new Set(cur);
+        nowOn ? n.add(t.uri) : n.delete(t.uri);
+        return n;
+      });
+      Spicetify.showNotification("Не удалось сохранить. Попробуй ещё раз", true);
+    }
+  };
+  return { isLiked: (t) => !off.has(t.uri), toggle };
 }
 
 /* ------------------------------------------------------------------ */
@@ -215,21 +339,13 @@ function DFTrackRow({ t, index, active, playing, onPlay, showAdded }) {
 /* ------------------------------------------------------------------ */
 
 function DFCollectionPage({ np }) {
-  const [liked, setLiked] = dfUseState(null);
-  const [lists, setLists] = dfUseState(null);
+  const liked = dfUseCached(DFLib.liked);
+  const lists = dfUseCached(DFLib.playlists);
+  const hearts = dfUseHearts();
   const History = Spicetify.Platform.History;
-
-  dfUseEffect(() => {
-    let alive = true;
-    DFLib.likedPage(0, 6).then((r) => alive && setLiked(r));
-    DFLib.playlists().then((r) => alive && setLists(r));
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   const playingUri = np.track && np.track.uri;
-  const count = liked ? liked.total : null;
+  const count = liked ? liked.length : null;
+  const likedPlaying = np.playing && dfIsLikedContext();
 
   return dfH(
     "div",
@@ -240,7 +356,7 @@ function DFCollectionPage({ np }) {
       { className: "df-coll-top" },
       dfH(
         "div",
-        { className: "df-likedcard", onClick: () => History.push(DF_ROUTE + "/liked"), role: "button" },
+        { className: "df-likedcard", onClick: () => History.push(DF_ROUTE + "/liked"), role: "button", tabIndex: 0 },
         dfH(DFHeartArt, { size: 120 }),
         dfH(
           "div",
@@ -249,19 +365,20 @@ function DFCollectionPage({ np }) {
             "div",
             null,
             dfH("div", { className: "df-likedcard__title" }, "Мне нравится"),
-            dfH("div", { className: "df-likedcard__sub" }, count == null ? "…" : count + " " + dfPlural(count, "трек", "трека", "треков"))
+            dfH("div", { className: "df-likedcard__sub" }, count == null ? "загружаем…" : count + " " + dfPlural(count, "трек", "трека", "треков"))
           ),
           dfH(
             "button",
             {
               className: "df-ctl df-ctl--play df-likedcard__play",
-              title: "Играть «Мне нравится»",
+              title: likedPlaying ? "Пауза" : "Играть «Мне нравится»",
               onClick: (e) => {
                 e.stopPropagation();
-                dfPlayLiked(null);
+                if (dfIsLikedContext()) Spicetify.Player.togglePlay();
+                else dfPlayLiked(null);
               },
             },
-            dfH(DFIcon, { name: "play", size: 24 })
+            dfH(DFIcon, { name: likedPlaying ? "pause" : "play", size: 24 })
           )
         )
       ),
@@ -270,13 +387,15 @@ function DFCollectionPage({ np }) {
         { className: "df-coll-recent" },
         dfH("div", { className: "df-subhead" }, "Недавно понравилось"),
         liked
-          ? liked.items.slice(0, 4).map((t, i) =>
+          ? liked.slice(0, 4).map((t, i) =>
               dfH(DFTrackRow, {
                 key: t.uri,
                 t,
                 index: i,
                 active: playingUri === t.uri,
                 playing: np.playing,
+                liked: hearts.isLiked(t),
+                onHeart: hearts.toggle(t),
                 onPlay: () => (playingUri === t.uri ? Spicetify.Player.togglePlay() : dfPlayLiked(t.uri)),
               })
             )
@@ -287,7 +406,7 @@ function DFCollectionPage({ np }) {
       "div",
       { className: "df-sectionhead" },
       dfH("h2", null, "Мои плейлисты"),
-      dfH("button", { className: "df-link", onClick: () => History.push("/collection/playlists") }, "Все")
+      lists ? dfH("span", { className: "df-sectionhead__count" }, lists.length) : null
     ),
     dfH(
       "div",
@@ -296,11 +415,11 @@ function DFCollectionPage({ np }) {
         ? lists.map((p) =>
             dfH(
               "div",
-              { key: p.uri, className: "df-card", onClick: () => History.push("/playlist/" + p.id), role: "button" },
+              { key: p.uri, className: "df-card", onClick: () => History.push("/playlist/" + p.id), role: "button", tabIndex: 0 },
               dfH(
                 "div",
                 { className: "df-card__img" },
-                p.cover ? dfH("img", { src: p.cover, alt: "", loading: "lazy" }) : dfH(DFIcon, { name: "lyrics", size: 40 }),
+                p.cover ? dfH("img", { src: p.cover, alt: "", loading: "lazy", decoding: "async" }) : dfH(DFIcon, { name: "lyrics", size: 40 }),
                 dfH(
                   "button",
                   {
@@ -315,7 +434,7 @@ function DFCollectionPage({ np }) {
                 )
               ),
               dfH("div", { className: "df-card__title" }, p.name),
-              dfH("div", { className: "df-card__sub" }, "Плейлист · " + p.count)
+              dfH("div", { className: "df-card__sub" }, "Плейлист · " + p.count + (p.owner ? " · " + p.owner : ""))
             )
           )
         : [0, 1, 2, 3, 4].map((i) => dfH("div", { key: i, className: "df-card df-card--skeleton" }, dfH("div", { className: "df-card__img" })))
@@ -327,47 +446,38 @@ function DFCollectionPage({ np }) {
 /* «Мне нравится»                                                      */
 /* ------------------------------------------------------------------ */
 
+const DF_PAGE_STEP = 120;
+
 function DFLikedPage({ np }) {
-  const [tracks, setTracks] = dfUseState([]);
-  const [total, setTotal] = dfUseState(null);
-  const [loading, setLoading] = dfUseState(false);
+  const all = dfUseCached(DFLib.liked);
+  const user = dfUseCached(DFLib.me);
+  const hearts = dfUseHearts();
   const [query, setQuery] = dfUseState("");
-  const [user, setUser] = dfUseState(null);
-  const [shuffle, setShuffle] = dfUseState(() => Spicetify.Player.getShuffle());
+  const [limit, setLimit] = dfUseState(DF_PAGE_STEP);
+  const [shuffle, setShuffle] = dfUseState(() => !!Spicetify.Player.getShuffle());
   const sentinel = dfUseRef(null);
-  const busy = dfUseRef(false);
   const History = Spicetify.Platform.History;
 
-  const loadMore = () => {
-    if (busy.current) return;
-    if (total != null && tracks.length >= total) return;
-    busy.current = true;
-    setLoading(true);
-    DFLib.likedPage(tracks.length, 50).then((r) => {
-      setTracks((cur) => cur.concat(r.items.filter((t) => !cur.some((c) => c.uri === t.uri))));
-      setTotal(r.error ? 0 : r.total);
-      setLoading(false);
-      busy.current = false;
-    });
-  };
-
-  dfUseEffect(() => {
-    DFLib.me().then(setUser);
-    loadMore();
-  }, []);
-
+  // список рисуется порциями — тысячи лайков не тормозят
   dfUseEffect(() => {
     const el = sentinel.current;
     if (!el) return;
-    const io = new IntersectionObserver((e) => e[0].isIntersecting && loadMore(), { rootMargin: "600px" });
+    const io = new IntersectionObserver((e) => e[0].isIntersecting && setLimit((l) => l + DF_PAGE_STEP), { rootMargin: "900px" });
     io.observe(el);
     return () => io.disconnect();
-  });
+  }, [all]);
+  dfUseEffect(() => setLimit(DF_PAGE_STEP), [query]);
 
+  const tracks = all || [];
   const q = query.trim().toLowerCase();
-  const shown = q ? tracks.filter((t) => (t.title + " " + t.artists.join(" ") + " " + t.album).toLowerCase().includes(q)) : tracks;
-  const totalMs = tracks.reduce((s, t) => s + t.duration, 0);
+  const filtered = dfUseMemoSafe(
+    () => (q ? tracks.filter((t) => (t.title + " " + t.artists.join(" ") + " " + t.album).toLowerCase().includes(q)) : tracks),
+    [tracks, q]
+  );
+  const shown = filtered.slice(0, limit);
+  const totalMs = dfUseMemoSafe(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
   const playingUri = np.track && np.track.uri;
+  const likedPlaying = np.playing && dfIsLikedContext();
 
   return dfH(
     "div",
@@ -385,12 +495,8 @@ function DFLikedPage({ np }) {
           "div",
           { className: "df-hero__meta" },
           user && user.avatar ? dfH("img", { src: user.avatar, alt: "" }) : null,
-          dfH("b", null, user ? user.name : ""),
-          dfH(
-            "span",
-            null,
-            total == null ? "" : " · " + total + " " + dfPlural(total, "трек", "трека", "треков") + (total && tracks.length >= total ? ", " + dfTotal(totalMs) : "")
-          )
+          user ? dfH("b", null, user.name) : null,
+          all ? dfH("span", null, " · " + all.length + " " + dfPlural(all.length, "трек", "трека", "треков") + (all.length ? ", " + dfTotal(totalMs) : "")) : null
         )
       )
     ),
@@ -399,14 +505,18 @@ function DFLikedPage({ np }) {
       { className: "df-actions" },
       dfH(
         "button",
-        { className: "df-ctl df-ctl--play", title: "Играть", onClick: () => (np.track && np.playing && tracks.some((t) => t.uri === playingUri) ? Spicetify.Player.togglePlay() : dfPlayLiked(null)) },
-        dfH(DFIcon, { name: np.playing && tracks.some((t) => t.uri === playingUri) ? "pause" : "play", size: 26 })
+        {
+          className: "df-ctl df-ctl--play",
+          title: likedPlaying ? "Пауза" : "Играть",
+          onClick: () => (dfIsLikedContext() ? Spicetify.Player.togglePlay() : dfPlayLiked(null)),
+        },
+        dfH(DFIcon, { name: likedPlaying ? "pause" : "play", size: 26 })
       ),
       dfH(
         "button",
         {
           className: "df-iconbtn" + (shuffle ? " is-on" : ""),
-          title: "Перемешать",
+          title: shuffle ? "Выключить перемешивание" : "Перемешать",
           onClick: () => {
             Spicetify.Player.setShuffle(!shuffle);
             setShuffle(!shuffle);
@@ -419,7 +529,8 @@ function DFLikedPage({ np }) {
         "label",
         { className: "df-search" },
         dfH(DFIcon, { name: "search", size: 16 }),
-        dfH("input", { value: query, placeholder: "Искать в «Мне нравится»", onChange: (e) => setQuery(e.target.value) })
+        dfH("input", { value: query, placeholder: "Искать в «Мне нравится»", onChange: (e) => setQuery(e.target.value) }),
+        query ? dfH("button", { className: "df-search__clear", onClick: () => setQuery(""), title: "Очистить" }, "×") : null
       ),
       dfH("button", { className: "df-link", onClick: () => History.push("/collection/tracks", { doppoNative: true }), title: "Родная страница Spotify" }, "Открыть в Spotify")
     ),
@@ -445,12 +556,19 @@ function DFLikedPage({ np }) {
           showAdded: true,
           active: playingUri === t.uri,
           playing: np.playing,
+          liked: hearts.isLiked(t),
+          onHeart: hearts.toggle(t),
           onPlay: () => (playingUri === t.uri ? Spicetify.Player.togglePlay() : dfPlayLiked(t.uri)),
         })
       ),
-      loading ? [0, 1, 2, 3, 4, 5].map((i) => dfH("div", { key: "s" + i, className: "df-row df-row--skeleton" })) : null,
-      !loading && total === 0 ? dfH("div", { className: "df-emptyrow" }, "Здесь появятся треки, которые тебе нравятся") : null,
+      !all ? [0, 1, 2, 3, 4, 5, 6, 7].map((i) => dfH("div", { key: "s" + i, className: "df-row df-row--skeleton" })) : null,
+      all && !all.length ? dfH("div", { className: "df-emptyrow" }, "Здесь появятся треки, которые тебе нравятся") : null,
+      all && all.length && !filtered.length ? dfH("div", { className: "df-emptyrow" }, "Ничего не нашлось по «" + query + "»") : null,
       dfH("div", { ref: sentinel, style: { height: 1 } })
     )
   );
+}
+
+function dfUseMemoSafe(fn, deps) {
+  return Spicetify.React.useMemo(fn, deps);
 }

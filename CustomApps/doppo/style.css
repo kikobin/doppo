@@ -48,7 +48,7 @@
 }
 .df-smoke {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  filter: blur(2.5px);
+  filter: blur(3px);
   animation: df-fade-in 1.6s ease both;
 }
 .df-backdrop__canvas {
@@ -59,9 +59,6 @@
 .df-backdrop.has-canvas .df-backdrop__art { opacity: 0.18; }
 .df-root--focus .df-backdrop__canvas { opacity: 0.75; filter: blur(18px) saturate(1.4) brightness(0.5); }
 
-/* Дымок в углу потока */
-.df-dymok { position: absolute; left: 26px; bottom: 18px; z-index: 2; animation: df-rise 0.8s 0.4s var(--df-ease) both; }
-@media (max-width: 1100px) { .df-dymok { display: none; } }
 
 @keyframes df-drift {
   0% { transform: scale(1.05) rotate(0deg) translate3d(0, 0, 0); }
@@ -512,3 +509,14 @@
   .df-row, .df-page--liked .df-row { grid-template-columns: 32px 46px minmax(140px, 1fr) 32px 52px; }
   .df-row__album, .df-row__added { display: none; }
 }
+
+/* --- коллекция: сердечко-переключатель, поиск, счётчик --- */
+button.df-row__heart { all: unset; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: var(--df-heart); transition: transform 0.15s ease, background 0.15s ease; }
+button.df-row__heart:hover { background: rgba(255, 255, 255, 0.08); transform: scale(1.1); }
+button.df-row__heart.is-off { color: rgba(255, 255, 255, 0.45); }
+.df-row.is-unliked .df-row__info, .df-row.is-unliked .df-row__cover { opacity: 0.45; }
+.df-row.is-disabled { opacity: 0.4; }
+.df-search__clear { all: unset; cursor: pointer; font-size: 18px; line-height: 1; color: rgba(255, 255, 255, 0.6); padding: 0 2px; }
+.df-search__clear:hover { color: #fff; }
+.df-sectionhead__count { font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.45); }
+.df-row { content-visibility: auto; contain-intrinsic-size: 62px; }

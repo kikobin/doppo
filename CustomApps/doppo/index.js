@@ -138,7 +138,9 @@ function DFSmoke({ playing, focusY, tint }) {
   dfUseEffect(() => {
     const canvas = ref.current;
     const ctx = canvas.getContext("2d");
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    // рисуем в пониженном разрешении: CSS-размытие всё равно смягчает края
+    const dpr = 0.6;
+    const releaseBeat = window.doppoBeat && window.doppoBeat.acquire ? window.doppoBeat.acquire() : null;
     let w = 0;
     let hgt = 0;
     let raf = 0;
@@ -170,8 +172,14 @@ function DFSmoke({ playing, focusY, tint }) {
     let t = 0;
     let speed = 0.3;
     let last = performance.now();
+    let visible = true;
+    const io = new IntersectionObserver((e) => (visible = e[0].isIntersecting));
+    io.observe(canvas);
 
     const frame = (now) => {
+      raf = requestAnimationFrame(frame);
+      // 30 кадров в секунду и пауза, когда дымку не видно
+      if (now - last < 32 || !visible || document.hidden) return;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const pulse = (window.doppoBeat && window.doppoBeat.pulse) || 0;
@@ -193,9 +201,7 @@ function DFSmoke({ playing, focusY, tint }) {
       ctx.fillRect(0, 0, w, hgt);
 
       ctx.globalCompositeOperation = "lighter";
-      ctx.shadowColor = "rgba(255,255,255,0.7)";
-      ctx.shadowBlur = 34;
-      const steps = 150;
+      const steps = 96;
       for (const s of wisps) {
         ctx.beginPath();
         const rot = s.rot + t * s.spin;
@@ -213,16 +219,21 @@ function DFSmoke({ playing, focusY, tint }) {
         ctx.strokeStyle = "rgba(" + (s.tinted ? tintRef.current : "255,255,255") + "," + (s.tinted ? s.alpha * 1.6 : s.alpha) * (1 + pulse * 0.9) + ")";
         ctx.lineWidth = s.width;
         ctx.stroke();
+        // мягкий ореол вместо дорогого shadowBlur
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = s.width * 5;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
       }
-      ctx.shadowBlur = 0;
       ctx.globalCompositeOperation = "source-over";
-      raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
 
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      io.disconnect();
+      if (releaseBeat) releaseBeat();
     };
   }, []);
 
@@ -642,30 +653,6 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Дымок на экране потока (сам маскот живёт в dymok.js)                */
-/* ------------------------------------------------------------------ */
-
-function DFDymok({ size }) {
-  const ref = dfUseRef(null);
-  dfUseEffect(() => {
-    let handle = null;
-    let timer = null;
-    const tryMount = () => {
-      if (window.doppoDymok && ref.current) {
-        handle = window.doppoDymok.mount(ref.current, size);
-        timer = setTimeout(() => handle && handle.say("привет! я Дымок"), 900);
-      } else timer = setTimeout(tryMount, 300);
-    };
-    tryMount();
-    return () => {
-      clearTimeout(timer);
-      if (handle) handle.unmount();
-    };
-  }, [size]);
-  return dfH("div", { className: "df-dymok", ref, title: "Дымок — нажми на него" });
-}
-
-/* ------------------------------------------------------------------ */
 /* Корень                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -721,6 +708,8 @@ function DoppoFlow() {
   const progress = dfUseProgress(mode === "lyrics" ? 250 : 400);
   const [settings, setSettings] = dfUseState(dfSettings);
   const [focus, setFocus] = dfUseState(() => localStorage.getItem(DF_FOCUS_KEY) === "1");
+  const focusRef = dfUseRef(focus);
+  focusRef.current = focus;
   const lyrics = dfUseLyrics(isPage ? null : np.track);
   const colors = dfUseCoverColors(np.track && np.track.uri);
   const upNext = dfUseUpNext(np.track && np.track.uri);
@@ -748,15 +737,27 @@ function DoppoFlow() {
     const onKey = (e) => {
       if (e.target && /input|textarea/i.test(e.target.tagName)) return;
       if (e.key === "f" || e.key === "F" || e.key === "а" || e.key === "А") toggleFocus();
-      if (e.key === "Escape") setFocus(false);
+      if (e.key === "Escape") {
+        if (focusRef.current) {
+          localStorage.setItem(DF_FOCUS_KEY, "0");
+          setFocus(false);
+        } else toFlowRef.current();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [mode]);
 
   const History = Spicetify.Platform.History;
-  const toLyrics = () => History.push(DF_ROUTE + "/lyrics");
-  const toFlow = () => History.push(DF_ROUTE);
+  const toLyrics = () => History.push(DF_ROUTE + "/lyrics", { doppoFrom: DF_ROUTE });
+  // «назад» из текста: туда, откуда пришли (поток, другая вкладка), иначе — в поток
+  const toFlow = () => {
+    const st = History.location && History.location.state;
+    if (st && st.doppoFrom && History.goBack) History.goBack();
+    else History.push(DF_ROUTE);
+  };
+  const toFlowRef = dfUseRef(toFlow);
+  toFlowRef.current = toFlow;
 
   const style = colors ? { "--df-glow": colors.glow, "--df-deep": colors.deep } : undefined;
 
@@ -775,8 +776,7 @@ function DoppoFlow() {
     mode === "lyrics" && np.track
       ? dfH(DFLyricsView, { np, progress, lyrics, focus, onBack: toFlow, onFocus: toggleFocus })
       : dfH(DFFlowView, { np, progress, lyrics, onLyrics: toLyrics }),
-    mode === "flow" ? dfH(DFUpNext, { next: upNext }) : null,
-    mode === "flow" && settings.dymok === true ? dfH(DFDymok, { size: 96 }) : null
+    mode === "flow" ? dfH(DFUpNext, { next: upNext }) : null
   );
 }
 

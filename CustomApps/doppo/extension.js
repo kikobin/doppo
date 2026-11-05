@@ -6,7 +6,7 @@
 //  • кнопку «Мой поток» в нижнем плеере (рядом с очередью, текстом и т.д.);
 //  • пункт «Запустить поток с этого трека» в контекстном меню трека;
 //  • подменю «doppo» в меню профиля с настройками;
-//  • маскот «Дымок» живёт в dymok.js (второе расширение из комплекта);
+//  • ритм трека для пульсации дымки считает beat.js (второе расширение из комплекта);
 //  • открывает текст doppo вместо родного экрана текста Spotify (отключаемо);
 //  • (по желанию) открывает «Мой поток» при запуске.
 //
@@ -42,7 +42,6 @@
         smoke: "Дымка в «Моём потоке»",
         playbar: "Кнопка «Мой поток» в плеере",
         lyrics: "Текст doppo вместо родного",
-        dymok: "Маскот в плеере",
         pages: "«Мне нравится» в стиле doppo",
         canvas: "Видео Canvas на фоне",
       }
@@ -56,13 +55,12 @@
         smoke: "Smoke in My Flow",
         playbar: "My Flow button in player",
         lyrics: "doppo lyrics instead of native",
-        dymok: "Mascot in player",
         pages: "doppo Liked Songs page",
         canvas: "Canvas video background",
       };
 
   /* ---------------- настройки ---------------- */
-  const DEFAULTS = { nav: true, openOnStart: false, smoke: true, playbar: true, lyrics: true, dymok: false, canvas: true, pages: true };
+  const DEFAULTS = { nav: true, openOnStart: false, smoke: true, playbar: true, lyrics: true, canvas: true, pages: true };
   function load() {
     try {
       return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || "{}"));
@@ -101,6 +99,8 @@
 .doppo-nav__item:hover { background: rgba(255,255,255,.05); color: #fff; }
 .doppo-nav__item:focus-visible { outline: 2px solid #fff; }
 .doppo-nav__item.is-active { background: rgba(255,255,255,.09); color: #fff; }
+.doppo-lyrics-on, .doppo-lyrics-on svg { color: #ffd60a !important; fill: currentColor; }
+.doppo-lyrics-on::after { content: ""; position: absolute; bottom: 2px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: #ffd60a; }
 .doppo-nav__divider { height: 1px; background: rgba(255,255,255,.07); margin: 8px 6px 2px; }
 @container (max-width: 140px) {
   .doppo-nav__logo span, .doppo-nav__label { display: none; }
@@ -168,8 +168,17 @@
     host.prepend(nav);
     highlight(History.location);
   }
-  function highlight(location) {
-    const path = (location && location.pathname) || "/";
+  // history v4 отдаёт location, v5 — { action, location }: берём надёжно
+  function curLoc(arg) {
+    if (arg && arg.location && arg.location.pathname !== undefined) return arg.location;
+    if (arg && arg.pathname !== undefined) return arg;
+    return History.location || { pathname: "/" };
+  }
+  const isFlowPath = (p) => p === ROUTE || p === ROUTE + "/" || p.startsWith(ROUTE + "/lyrics");
+  const isLyricsPath = (p) => p.startsWith(ROUTE + "/lyrics");
+
+  function highlight(arg) {
+    const path = curLoc(arg).pathname || "/";
     nav.querySelectorAll(".doppo-nav__item").forEach((btn) => {
       const paths = [btn.dataset.path].concat(btn.dataset.also ? btn.dataset.also.split("|") : []);
       const hit = (p) => path === p || path.startsWith(p + "/");
@@ -177,15 +186,32 @@
       const active = btn.dataset.path === ROUTE ? path === ROUTE || hit(ROUTE + "/lyrics") : paths.some(hit);
       btn.classList.toggle("is-active", active);
     });
-    document.body.classList.toggle("doppo-route-flow", path === ROUTE || path.startsWith(ROUTE + "/"));
-    if (playbarBtn) playbarBtn.active = path === ROUTE || path.startsWith(ROUTE + "/");
+    document.body.classList.toggle("doppo-route-flow", isFlowPath(path));
+    document.body.classList.toggle("doppo-route-lyrics", isLyricsPath(path));
+    if (playbarBtn) playbarBtn.active = isFlowPath(path);
+  }
+
+  // назад, если есть куда; иначе — на главную
+  function back(fallback) {
+    if (History.length > 1 && History.goBack) History.goBack();
+    else History.push(fallback || "/");
+  }
+  function toggleFlow() {
+    const p = curLoc().pathname;
+    if (p === ROUTE) back("/");
+    else History.push(ROUTE);
+  }
+  function toggleLyrics() {
+    const p = curLoc().pathname;
+    if (isLyricsPath(p)) back(ROUTE);
+    else History.push(ROUTE + "/lyrics", { doppoFrom: p });
   }
 
   /* ---------------- кнопка в плеере ---------------- */
   let playbarBtn = null;
   let playbarRegistered = false;
   try {
-    playbarBtn = new Spicetify.Playbar.Button(T.flow, ICONS.flow, () => History.push(ROUTE), false, false, false);
+    playbarBtn = new Spicetify.Playbar.Button(T.flow, ICONS.flow, toggleFlow, false, false, false);
   } catch (e) {
     playbarBtn = null;
   }
@@ -218,10 +244,6 @@
     smoke: new Spicetify.Menu.Item(T.smoke, settings.smoke, (self) => {
       save({ smoke: !settings.smoke });
       self.setState(settings.smoke);
-    }),
-    dymok: new Spicetify.Menu.Item(T.dymok, settings.dymok, (self) => {
-      save({ dymok: !settings.dymok });
-      self.setState(settings.dymok);
     }),
     canvas: new Spicetify.Menu.Item(T.canvas, settings.canvas, (self) => {
       save({ canvas: !settings.canvas });
@@ -258,25 +280,55 @@
 
   // родной экран текста → текст doppo (сам экран Spotify остаётся доступен, если выключить пункт)
   // и родной «Любимые треки» → «Мне нравится» doppo (кроме перехода по кнопке «Открыть в Spotify»)
-  function redirectLyrics(location) {
-    const path = location && location.pathname;
-    const native = location && location.state && location.state.doppoNative;
+  function redirectLyrics(arg) {
+    const loc = curLoc(arg);
+    const path = loc.pathname || "";
+    const native = loc.state && loc.state.doppoNative;
     let to = null;
-    if (settings.lyrics && path === "/lyrics") to = ROUTE + "/lyrics";
+    if (settings.lyrics && (path === "/lyrics" || path.startsWith("/lyrics/"))) to = ROUTE + "/lyrics";
     if (settings.pages && path === "/collection/tracks" && !native) to = ROUTE + "/liked";
     if (!to) return;
     setTimeout(() => (History.replace ? History.replace(to) : History.push(to)), 0);
   }
 
+  // Кнопка «Текст» в нижнем плеере: перехватываем нажатие ещё до Spotify,
+  // чтобы с любой вкладки открывался текст doppo (повторное нажатие — закрыть).
+  const LYRICS_BTN =
+    'button[data-testid="lyrics-button"], .main-nowPlayingBar-lyricsButton, ' +
+    '.main-nowPlayingBar-extraControls button[aria-label="Lyrics"], .main-nowPlayingBar-extraControls button[aria-label="Текст"]';
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (!settings.lyrics) return;
+      const btn = e.target && e.target.closest && e.target.closest(LYRICS_BTN);
+      if (!btn) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      toggleLyrics();
+    },
+    true
+  );
+  // подсвечиваем родную кнопку текста, когда открыт текст doppo
+  function markLyricsBtn() {
+    const on = isLyricsPath(curLoc().pathname || "");
+    document.querySelectorAll(LYRICS_BTN).forEach((b) => b.classList.toggle("doppo-lyrics-on", on && settings.lyrics));
+  }
+
   applySettings();
-  highlight(History.location);
-  redirectLyrics(History.location);
-  History.listen((loc) => {
-    highlight(loc);
-    redirectLyrics(loc);
+  highlight();
+  redirectLyrics();
+  markLyricsBtn();
+  History.listen((arg) => {
+    highlight(arg);
+    redirectLyrics(arg);
+    markLyricsBtn();
   });
-  // Spotify иногда перерисовывает левую панель — возвращаем блок на место
-  setInterval(mountNav, 1500);
+  window.doppoNav = { toggleLyrics, toggleFlow, back };
+  // Spotify иногда перерисовывает левую панель и плеер — возвращаем своё на место
+  setInterval(() => {
+    mountNav();
+    markLyricsBtn();
+  }, 2000);
 
   if (settings.openOnStart) {
     const p = History.location && History.location.pathname;

@@ -445,7 +445,7 @@ function dfUseLyrics(track) {
 /* Большой караоке-экран                                               */
 /* ------------------------------------------------------------------ */
 
-function DFKaraoke({ data, focus, onSeek }) {
+function DFKaraokeView({ data, focus, onSeek }) {
   const R = Spicetify.React;
   const h = R.createElement;
   const lines = data.lines;
@@ -568,7 +568,7 @@ function DFKaraoke({ data, focus, onSeek }) {
 /* Текст без синхронизации                                             */
 /* ------------------------------------------------------------------ */
 
-function DFPlainLyrics({ data }) {
+function DFPlainLyricsView({ data }) {
   const h = Spicetify.React.createElement;
   return h(
     "div",
@@ -582,7 +582,7 @@ function DFPlainLyrics({ data }) {
 /* «Живая строка» на экране потока                                     */
 /* ------------------------------------------------------------------ */
 
-function DFLiveLine({ data, onOpen }) {
+function DFLiveLineView({ data, onOpen }) {
   const R = Spicetify.React;
   const h = R.createElement;
   const lines = data.lines;
@@ -637,3 +637,9 @@ function DFLiveLine({ data, onOpen }) {
     h("div", { className: "dfl-next", key: "n" + active }, next ? next.text : " ")
   );
 }
+
+/* Перерисовываем караоке только когда сменился текст или режим —
+   а не каждый тик прогресса (заливка идёт напрямую в DOM). */
+const DFKaraoke = Spicetify.React.memo(DFKaraokeView, (a, b) => a.data === b.data && a.focus === b.focus);
+const DFPlainLyrics = Spicetify.React.memo(DFPlainLyricsView, (a, b) => a.data === b.data);
+const DFLiveLine = Spicetify.React.memo(DFLiveLineView, (a, b) => a.data === b.data);
