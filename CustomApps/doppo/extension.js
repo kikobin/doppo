@@ -221,7 +221,8 @@
     new Spicetify.ContextMenu.Item(
       T.startFlow,
       async ([uri]) => {
-        await Spicetify.Player.playUri(uri);
+        if (window.doppoFlow) window.doppoFlow.startFrom(uri);
+        else await Spicetify.Player.playUri(uri);
         History.push(ROUTE);
       },
       (uris) => uris.length === 1 && Spicetify.URI.isTrack(uris[0]),
@@ -262,8 +263,11 @@
       self.setState(settings.openOnStart);
     }),
   };
+  const resetItem = new Spicetify.Menu.Item(ru ? "Сбросить вкус потока" : "Reset flow taste", false, () => {
+    if (window.doppoFlow) window.doppoFlow.resetTaste();
+  });
   try {
-    new Spicetify.Menu.SubMenu("doppo", Object.values(menuItems)).register();
+    new Spicetify.Menu.SubMenu("doppo", Object.values(menuItems).concat(resetItem)).register();
   } catch (e) {
     Object.values(menuItems).forEach((i) => i.register());
   }

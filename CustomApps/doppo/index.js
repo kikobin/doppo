@@ -59,7 +59,8 @@ function dfIsLiked() {
   }
 }
 
-async function dfStartFlow() {
+async function dfStartFlow(mode) {
+  if (window.doppoFlow) return window.doppoFlow.start(mode || "vibe");
   // «Мой поток»: перемешанные «Мне нравится»
   try {
     const user = await dfUsername();
@@ -272,13 +273,14 @@ const DF_ICONS = {
   unfocus: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
   minus: "M6 12h12",
   plus: "M6 12h12M12 6v12",
+  dislike: "M12 3.5s7.5 4.6 9.2 9.4c1.2 3.5-1 7.1-4.5 7.1-2 0-3.4-1.1-4.7-2.7-1.3 1.6-2.7 2.7-4.7 2.7-3.5 0-5.7-3.6-4.5-7.1C4.5 8.1 12 3.5 12 3.5zM4 4l16 16",
   shuffle: "M3 7h3.5c2 0 3 1 4.2 2.6l2.6 3.8C14.5 15 15.5 17 17.5 17H21M3 17h3.5c1.6 0 2.5-.7 3.4-1.8M13.6 8.8c.9-1.1 1.9-1.8 3.9-1.8H21M18.5 4.5 21 7l-2.5 2.5M18.5 14.5 21 17l-2.5 2.5",
   search: "M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM15.5 15.5 20 20",
   clock: "M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16zM12 7.5V12l3 2",
 };
 
 function DFIcon({ name, fill, size }) {
-  const stroke = ["lyrics", "back", "focus", "unfocus", "minus", "plus", "copy", "shuffle", "search", "clock"].includes(name) || (name === "heart" && !fill);
+  const stroke = ["lyrics", "back", "focus", "unfocus", "minus", "plus", "shuffle", "search", "clock", "dislike"].includes(name) || (name === "heart" && !fill);
   return dfH(
     "svg",
     { viewBox: "0 0 24 24", width: size || 24, height: size || 24, "aria-hidden": true },
@@ -310,11 +312,12 @@ function dfUseOptimistic(real) {
   return [over ? over.v : real, (v) => setOver({ v, at: Date.now() })];
 }
 
-function DFControls({ playing, hasTrack, big }) {
+function DFControls({ playing, hasTrack, big, left, right }) {
   const [shown, setShown] = dfUseOptimistic(playing);
   return dfH(
     "div",
     { className: "df-controls" + (big ? " df-controls--big" : "") },
+    left !== undefined ? dfH("div", { className: "df-controls__slot" }, left) : null,
     dfH("button", { className: "df-ctl", title: "Назад", onClick: () => Spicetify.Player.back() }, dfH(DFIcon, { name: "prev", size: 20 })),
     dfH(
       "button",
@@ -328,7 +331,8 @@ function DFControls({ playing, hasTrack, big }) {
       },
       dfH(DFIcon, { name: shown ? "pause" : "play", size: 24 })
     ),
-    dfH("button", { className: "df-ctl", title: "Дальше", onClick: () => Spicetify.Player.next() }, dfH(DFIcon, { name: "next", size: 20 }))
+    dfH("button", { className: "df-ctl", title: "Дальше", onClick: () => Spicetify.Player.next() }, dfH(DFIcon, { name: "next", size: 20 })),
+    right !== undefined ? dfH("div", { className: "df-controls__slot" }, right) : null
   );
 }
 
@@ -477,7 +481,7 @@ function dfUseUpNext(uri) {
   return next;
 }
 
-function DFUpNext({ next }) {
+function DFUpNext({ next, flow }) {
   if (!next) return null;
   return dfH(
     "button",
@@ -486,7 +490,7 @@ function DFUpNext({ next }) {
     dfH(
       "div",
       { className: "df-upnext__text" },
-      dfH("small", null, "Дальше"),
+      dfH("small", null, flow && flow.active ? "Дальше в потоке" : "Дальше"),
       dfH("b", null, next.title),
       dfH("span", null, next.artist)
     )
@@ -496,6 +500,40 @@ function DFUpNext({ next }) {
 /* ------------------------------------------------------------------ */
 /* Экран «Мой поток»                                                   */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* «Дальше в очереди»                                                  */
+/* ------------------------------------------------------------------ */
+/* Состояние «Моего потока» (движок — flowengine.js)                   */
+/* ------------------------------------------------------------------ */
+
+function dfReadFlow() {
+  const f = window.doppoFlow;
+  return f ? f.state : { active: false, mode: "vibe" };
+}
+function dfUseFlow() {
+  const [st, setSt] = dfUseState(dfReadFlow);
+  dfUseEffect(() => {
+    const upd = () =>
+      setSt((cur) => {
+        const n = dfReadFlow();
+        return cur.active === n.active && cur.mode === n.mode ? cur : n;
+      });
+    window.addEventListener("doppo:flow", upd);
+    const id = setInterval(upd, 1500);
+    return () => {
+      window.removeEventListener("doppo:flow", upd);
+      clearInterval(id);
+    };
+  }, []);
+  return st;
+}
+
+const DF_MODES = [
+  ["vibe", "Под вайб"],
+  ["fav", "Любимое"],
+  ["fresh", "Незнакомое"],
+];
 
 /* ------------------------------------------------------------------ */
 /* Ссылки и перемотка                                                  */
@@ -574,7 +612,19 @@ function DFSeekable({ className, duration, children }) {
   );
 }
 
-function DFFlowView({ np, progress, lyrics, onLyrics }) {
+function DFFlowView({ np, progress, lyrics, onLyrics, flow }) {
+  const [pendingMode, setPendingMode] = dfUseState(null);
+  dfUseEffect(() => {
+    if (!pendingMode) return;
+    if (flow.active && flow.mode === pendingMode) return setPendingMode(null);
+    const id = setTimeout(() => setPendingMode(null), 6000);
+    return () => clearTimeout(id);
+  }, [pendingMode, flow.active, flow.mode]);
+  const startMode = (m) => {
+    setPendingMode(m);
+    dfStartFlow(m);
+  };
+  const activeMode = pendingMode || (flow.active ? flow.mode : null);
   const t = np.track;
   const pct = t && t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
   const title = t ? t.title : "Мой поток";
@@ -583,7 +633,14 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
   return dfH(
     "div",
     { className: "df-flow" },
-    dfH("div", { className: "df-badge" }, "Мой поток"),
+    flow.active || pendingMode
+      ? dfH("div", { className: "df-badge is-live", title: "Поток играет" }, dfH("i", { className: "df-badge__dot" }), "Мой поток")
+      : dfH(
+          "button",
+          { className: "df-badge df-badge--start", onClick: () => startMode(flow.mode || "vibe"), title: "Запустить бесконечный поток под твой вкус" },
+          dfH(DFIcon, { name: "play", size: 14 }),
+          "Запустить мой поток"
+        ),
     dfH("h1", { className: "df-title " + titleSize, title }, title),
     dfH(
       "div",
@@ -601,8 +658,13 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
       { className: "df-barrow" },
       dfH(
         "button",
-        { className: "df-side", title: "Текст песни", onClick: onLyrics, disabled: !t },
-        dfH(DFIcon, { name: "lyrics", size: 20 })
+        {
+          className: "df-side",
+          title: "Не нравится — пропустить и больше не предлагать",
+          onClick: () => (window.doppoFlow ? window.doppoFlow.dislike() : Spicetify.Player.next()),
+          disabled: !t,
+        },
+        dfH(DFIcon, { name: "dislike", size: 20 })
       ),
       dfH(
         DFSeekable,
@@ -612,7 +674,31 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
       ),
       dfH(DFHeart, { liked: np.liked, onClick: np.toggleLike })
     ),
-    dfH(DFControls, { playing: np.playing, hasTrack: !!t, big: true })
+    dfH(DFControls, {
+      playing: np.playing,
+      hasTrack: !!t,
+      big: true,
+      left: dfH("button", { className: "df-ctl df-ctl--small", title: "Текст песни", onClick: onLyrics, disabled: !t }, dfH(DFIcon, { name: "lyrics", size: 18 })),
+      right: dfH("span", { className: "df-ctl df-ctl--small df-ctl--ghost" }),
+    }),
+    dfH(
+      "div",
+      { className: "df-modes", role: "tablist", "aria-label": "Режим потока" },
+      DF_MODES.map(([m, label]) =>
+        dfH(
+          "button",
+          {
+            key: m,
+            role: "tab",
+            "aria-selected": activeMode === m,
+            className: "df-mode" + (activeMode === m ? " is-on" : ""),
+            onClick: () => startMode(m),
+            title: { vibe: "Новое рядом с тем, что тебе нравится", fav: "Твои лайки вперемешку", fresh: "Только то, чего нет в твоих лайках" }[m],
+          },
+          label
+        )
+      )
+    )
   );
 }
 
@@ -779,6 +865,8 @@ function DoppoFlow() {
   focusRef.current = focus;
   const lyrics = dfUseLyrics(isPage ? null : np.track);
   const colors = dfUseCoverColors(np.track && np.track.uri);
+  const flow = dfUseFlow();
+  const upNext = dfUseUpNext(np.track && np.track.uri);
   const canvas = dfUseCanvas(np.track && np.track.uri, settings.canvas === true && !isPage);
 
   dfUseEffect(() => {
@@ -841,7 +929,8 @@ function DoppoFlow() {
     dfH(DFBackdrop, { track: np.track, playing: np.playing, colors, mode, smoke: settings.smoke, canvas }),
     mode === "lyrics" && np.track
       ? dfH(DFLyricsView, { np, progress, lyrics, focus, onBack: toFlow, onFocus: toggleFocus })
-      : dfH(DFFlowView, { np, progress, lyrics, onLyrics: toLyrics })
+      : dfH(DFFlowView, { np, progress, lyrics, onLyrics: toLyrics, flow }),
+    mode === "flow" ? dfH(DFUpNext, { next: upNext, flow }) : null
   );
 }
 

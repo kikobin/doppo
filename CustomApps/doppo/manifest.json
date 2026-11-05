@@ -10,6 +10,7 @@
     "library.js"
   ],
   "subfiles_extension": [
-    "extension.js"
+    "extension.js",
+    "flowengine.js"
   ]
 }

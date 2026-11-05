@@ -585,3 +585,36 @@ a.df-album { display: block; }
 
 /* фокус с клавиатуры — везде видно, где ты */
 .df-root button:focus-visible, .df-root [role="button"]:focus-visible, .df-root select:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* =====================================================================
+   «Мой поток» как волна: запуск, режимы, дизлайк
+   ===================================================================== */
+button.df-badge { font-family: inherit; cursor: pointer; }
+.df-badge--start {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: rgba(255, 214, 10, 0.95);
+  transition: transform 0.25s var(--df-ease), box-shadow 0.25s ease, background 0.2s ease;
+}
+.df-badge--start:hover { transform: scale(1.04); box-shadow: 0 0 36px rgba(255, 214, 10, 0.45); }
+.df-badge--start:active { transform: scale(0.97); }
+.df-badge.is-live { display: inline-flex; align-items: center; gap: 8px; }
+.df-badge__dot { width: 7px; height: 7px; border-radius: 50%; background: #241c00; animation: df-live 1.8s ease-in-out infinite; }
+@keyframes df-live { 50% { opacity: 0.35; transform: scale(0.8); } }
+
+.df-controls__slot { width: 46px; display: grid; place-items: center; }
+.df-ctl--small { width: 40px; height: 40px; color: rgba(255, 255, 255, 0.6); }
+.df-ctl--small:disabled { opacity: 0.3; cursor: default; }
+.df-ctl--ghost { visibility: hidden; }
+
+.df-modes {
+  display: inline-flex; gap: 4px; margin-top: 14px; padding: 4px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+.df-mode {
+  all: unset; cursor: pointer; padding: 7px 14px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.6);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+.df-mode:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.df-mode.is-on { background: #fff; color: #0c0c0e; }
+.df-mode:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
