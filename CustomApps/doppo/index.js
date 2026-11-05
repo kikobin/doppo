@@ -86,13 +86,17 @@ function dfUseNowPlaying() {
     Spicetify.Player.addEventListener("songchange", update);
     Spicetify.Player.addEventListener("onplaypause", update);
     // лайк меняется и из других мест — сверяемся раз в секунду
+    // события Spotify приходят не всегда — сверяемся сами (трек, пауза, лайк)
     const id = setInterval(() => {
       setState((s) => {
         const liked = dfIsLiked();
         const playing = Spicetify.Player.isPlaying();
-        return s.liked === liked && s.playing === playing ? s : { ...s, liked, playing };
+        const track = dfReadTrack();
+        const same = (s.track && s.track.uri) === (track && track.uri);
+        if (same && s.liked === liked && s.playing === playing) return s;
+        return { track: same ? s.track : track, liked, playing };
       });
-    }, 1000);
+    }, 500);
     return () => {
       Spicetify.Player.removeEventListener("songchange", update);
       Spicetify.Player.removeEventListener("onplaypause", update);
@@ -257,7 +261,6 @@ const DF_ICONS = {
   unfocus: "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5",
   minus: "M6 12h12",
   plus: "M6 12h12M12 6v12",
-  copy: "M9 9h10v11H9zM5 15V4h10",
   shuffle: "M3 7h3.5c2 0 3 1 4.2 2.6l2.6 3.8C14.5 15 15.5 17 17.5 17H21M3 17h3.5c1.6 0 2.5-.7 3.4-1.8M13.6 8.8c.9-1.1 1.9-1.8 3.9-1.8H21M18.5 4.5 21 7l-2.5 2.5M18.5 14.5 21 17l-2.5 2.5",
   search: "M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zM15.5 15.5 20 20",
   clock: "M12 4a8 8 0 1 1 0 16 8 8 0 0 1 0-16zM12 7.5V12l3 2",
@@ -283,7 +286,21 @@ function DFIcon({ name, fill, size }) {
 /* Элементы управления                                                 */
 /* ------------------------------------------------------------------ */
 
+// Иконка меняется сразу по нажатию, не дожидаясь ответа Spotify;
+// через 1.5 с (или когда Spotify подтвердит) снова верим реальному состоянию.
+function dfUseOptimistic(real) {
+  const [over, setOver] = dfUseState(null);
+  dfUseEffect(() => {
+    if (over === null) return;
+    if (over.v === real) return setOver(null);
+    const id = setTimeout(() => setOver(null), 1500);
+    return () => clearTimeout(id);
+  }, [over, real]);
+  return [over ? over.v : real, (v) => setOver({ v, at: Date.now() })];
+}
+
 function DFControls({ playing, hasTrack, big }) {
+  const [shown, setShown] = dfUseOptimistic(playing);
   return dfH(
     "div",
     { className: "df-controls" + (big ? " df-controls--big" : "") },
@@ -292,10 +309,13 @@ function DFControls({ playing, hasTrack, big }) {
       "button",
       {
         className: "df-ctl df-ctl--play",
-        title: playing ? "Пауза" : "Играть",
-        onClick: () => (hasTrack ? Spicetify.Player.togglePlay() : dfStartFlow()),
+        title: shown ? "Пауза" : "Играть",
+        onClick: () => {
+          setShown(!shown);
+          hasTrack ? Spicetify.Player.togglePlay() : dfStartFlow();
+        },
       },
-      dfH(DFIcon, { name: playing ? "pause" : "play", size: 24 })
+      dfH(DFIcon, { name: shown ? "pause" : "play", size: 24 })
     ),
     dfH("button", { className: "df-ctl", title: "Дальше", onClick: () => Spicetify.Player.next() }, dfH(DFIcon, { name: "next", size: 20 }))
   );
@@ -541,53 +561,29 @@ function DFLyricsPanel({ track, lyrics, focus }) {
 function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
   const t = np.track;
   const pct = t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
-  const [offset, setOffset] = dfUseState(dfLyricsOffset);
-  const bumpOffset = (d) => {
-    const v = Math.round((dfLyricsOffset() + d) * 10) / 10;
-    localStorage.setItem(DF_OFFSET_KEY, String(v));
-    setOffset(v);
-  };
+
+  // сдвиг текста — без кнопок, только клавиши [ и ] (тихая подсказка снизу)
+  const [offsetHint, setOffsetHint] = dfUseState(null);
+  const hintTimer = dfUseRef(null);
   dfUseEffect(() => {
     const onKey = (e) => {
       if (e.target && /input|textarea/i.test(e.target.tagName)) return;
-      if (e.key === "[") bumpOffset(-100);
-      if (e.key === "]") bumpOffset(100);
-      if ((e.key === "c" || e.key === "с") && !e.metaKey && !e.ctrlKey) copyRef.current();
+      if (e.key !== "[" && e.key !== "]") return;
+      const v = dfLyricsOffset() + (e.key === "]" ? 100 : -100);
+      localStorage.setItem(DF_OFFSET_KEY, String(v));
+      setOffsetHint((v > 0 ? "+" : "") + (v / 1000).toFixed(1) + " с");
+      clearTimeout(hintTimer.current);
+      hintTimer.current = setTimeout(() => setOffsetHint(null), 1400);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      clearTimeout(hintTimer.current);
+    };
   }, []);
 
   const source = lyrics.status === "ok" ? lyrics.data.source : null;
-  const copyLine = () => {
-    if (lyrics.status !== "ok") return;
-    const lines = lyrics.data.lines.filter((l) => !l.interlude);
-    let line = null;
-    if (lyrics.data.kind === "word" || lyrics.data.kind === "line") {
-      const t0 = DFClock.now() + dfLyricsOffset();
-      const all = lyrics.data.lines;
-      const i = dfFindActive(all, t0);
-      line = all.slice(0, i + 1).reverse().find((l) => !l.interlude) || lines[0];
-    }
-    const text = line ? line.text : lines.map((l) => l.text).join("\n");
-    const id = (t.uri || "").split(":")[2];
-    const payload = "«" + text.trim() + "»\n— " + t.artists.join(", ") + ", " + t.title + (id ? "\nhttps://open.spotify.com/track/" + id : "");
-    const done = () => Spicetify.showNotification(line ? "Строка скопирована" : "Текст скопирован");
-    const fallback = () => {
-      try {
-        Spicetify.Platform.ClipboardAPI.copy(payload);
-        done();
-      } catch (e) {
-        Spicetify.showNotification("Не получилось скопировать", true);
-      }
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(payload).then(done, fallback);
-    else fallback();
-  };
-  const copyRef = dfUseRef(copyLine);
-  copyRef.current = copyLine;
-  const kindLabel =
-    lyrics.status === "ok" ? { word: "по словам", line: "по строкам", plain: "без синхронизации", instrumental: "" }[lyrics.data.kind] : "";
+  const canFocus = lyrics.status === "ok" && lyrics.data.kind !== "instrumental";
 
   return dfH(
     "div",
@@ -595,7 +591,7 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
     dfH(
       "div",
       { className: "df-lyrics__left" },
-      dfH("button", { className: "df-back", onClick: onBack }, dfH(DFIcon, { name: "back", size: 18 }), "Мой поток"),
+      dfH("button", { className: "df-back", onClick: onBack }, dfH(DFIcon, { name: "back", size: 18 }), "Назад"),
       dfH("div", { className: "df-lcover" }, t.cover ? dfH("img", { src: t.cover, alt: "", draggable: false, key: t.cover }) : null),
       dfH(
         "div",
@@ -615,39 +611,24 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
     dfH(
       "div",
       { className: "df-lyrics__right" },
+      focus
+        ? dfH("div", { className: "df-lyrics__ctx" }, dfH("b", null, t.title), dfH("small", null, t.artists.join(", ")))
+        : t.context
+        ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, "Играет из"), dfH("b", null, t.context))
+        : null,
+      dfH("div", { className: "df-lyrics__body" }, dfH(DFLyricsPanel, { track: t, lyrics, focus })),
       dfH(
         "div",
-        { className: "df-lyrics__head" },
-        focus
-          ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, t.artists.join(", ")), dfH("b", null, t.title))
-          : t.context
-          ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, "Играет из"), dfH("b", null, t.context))
-          : dfH("div"),
-        dfH(
-          "div",
-          { className: "df-lyrics__tools" },
-          lyrics.status === "ok" && lyrics.data.kind !== "plain" && lyrics.data.kind !== "instrumental"
-            ? dfH(
-                "div",
-                { className: "df-offset", title: "Сдвиг текста — клавиши [ и ]" },
-                dfH("button", { onClick: () => bumpOffset(-100) }, dfH(DFIcon, { name: "minus", size: 14 })),
-                dfH("span", null, (offset > 0 ? "+" : "") + (offset / 1000).toFixed(1) + " с"),
-                dfH("button", { onClick: () => bumpOffset(100) }, dfH(DFIcon, { name: "plus", size: 14 }))
-              )
-            : null,
-          lyrics.status === "ok" && lyrics.data.kind !== "instrumental"
-            ? dfH("button", { className: "df-tool", onClick: copyLine, title: "Скопировать текущую строку со ссылкой на трек (C)" }, dfH(DFIcon, { name: "copy", size: 15 }), "Строка")
-            : null,
-          dfH(
-            "button",
-            { className: "df-tool" + (focus ? " is-on" : ""), onClick: onFocus, title: "Сцена — только текст (F)" },
-            dfH(DFIcon, { name: focus ? "unfocus" : "focus", size: 16 }),
-            focus ? "Обычный вид" : "Сцена"
-          )
-        )
-      ),
-      dfH("div", { className: "df-lyrics__body" }, dfH(DFLyricsPanel, { track: t, lyrics, focus })),
-      source ? dfH("div", { className: "df-lyrics__src" }, "Текст · " + source + (kindLabel ? " · " + kindLabel : "")) : null
+        { className: "df-lyrics__foot" },
+        dfH("span", { className: "df-lyrics__src" }, offsetHint ? "Сдвиг текста " + offsetHint : source ? "Текст · " + source : ""),
+        canFocus
+          ? dfH(
+              "button",
+              { className: "df-focusbtn" + (focus ? " is-on" : ""), onClick: onFocus, title: focus ? "Обычный вид (F)" : "Сцена — только текст (F)" },
+              dfH(DFIcon, { name: focus ? "unfocus" : "focus", size: 16 })
+            )
+          : null
+      )
     )
   );
 }

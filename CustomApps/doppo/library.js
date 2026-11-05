@@ -196,10 +196,34 @@ function dfUseCached(store) {
   return v;
 }
 
+function dfContextUri() {
+  const d = Spicetify.Player.data || {};
+  return (d.context && d.context.uri) || d.context_uri || d.contextUri || "";
+}
 function dfIsLikedContext() {
-  const d = Spicetify.Player.data;
-  const uri = (d && d.context && d.context.uri) || (d && d.context_uri) || "";
-  return /:collection(:|$)/.test(uri);
+  const uri = dfContextUri();
+  return /:collection(:|$)|^spotify:collection/.test(uri) && !/:collection:(your-episodes|artist|album)/.test(uri);
+}
+
+// «что сейчас должно гореть»: сразу после нажатия показываем нажатое (pending),
+// пока Spotify не подтвердит или не пройдёт 3 с
+function dfUsePending(np) {
+  const [pending, setPending] = dfUseState(null);
+  const realUri = np.track && np.track.uri;
+  const realCtx = dfContextUri();
+  dfUseEffect(() => {
+    if (!pending) return;
+    const sameTarget = pending.uri ? pending.uri === realUri : pending.ctx === realCtx;
+    if (sameTarget && np.playing === pending.playing) return setPending(null);
+    const id = setTimeout(() => setPending(null), 3000);
+    return () => clearTimeout(id);
+  }, [pending, realUri, realCtx, np.playing]);
+  return {
+    uri: pending && pending.uri ? pending.uri : realUri,
+    ctx: pending && pending.ctx ? pending.ctx : realCtx,
+    playing: pending ? pending.playing : np.playing,
+    set: setPending,
+  };
 }
 
 async function dfUsername() {
@@ -342,10 +366,30 @@ function DFCollectionPage({ np }) {
   const liked = dfUseCached(DFLib.liked);
   const lists = dfUseCached(DFLib.playlists);
   const hearts = dfUseHearts();
+  const pend = dfUsePending(np);
   const History = Spicetify.Platform.History;
-  const playingUri = np.track && np.track.uri;
+  const playingUri = pend.uri;
   const count = liked ? liked.length : null;
-  const likedPlaying = np.playing && dfIsLikedContext();
+  const likedCtx = pend.ctx ? /collection/.test(pend.ctx) : false;
+  const likedPlaying = pend.playing && likedCtx;
+  const playTrack = (t) => {
+    if (playingUri === t.uri) {
+      pend.set({ uri: t.uri, playing: !pend.playing });
+      Spicetify.Player.togglePlay();
+    } else {
+      pend.set({ uri: t.uri, playing: true });
+      dfPlayLiked(t.uri);
+    }
+  };
+  const playCtx = (ctx, start) => {
+    if (pend.ctx === ctx) {
+      pend.set({ ctx, playing: !pend.playing });
+      Spicetify.Player.togglePlay();
+    } else {
+      pend.set({ ctx, playing: true });
+      start();
+    }
+  };
 
   return dfH(
     "div",
@@ -374,8 +418,12 @@ function DFCollectionPage({ np }) {
               title: likedPlaying ? "Пауза" : "Играть «Мне нравится»",
               onClick: (e) => {
                 e.stopPropagation();
-                if (dfIsLikedContext()) Spicetify.Player.togglePlay();
-                else dfPlayLiked(null);
+                if (likedCtx) {
+                  pend.set({ ctx: pend.ctx, playing: !pend.playing });
+                  Spicetify.Player.togglePlay();
+                } else {
+                  dfUsername().then((u) => playCtx("spotify:user:" + u + ":collection", () => dfPlayLiked(null)));
+                }
               },
             },
             dfH(DFIcon, { name: likedPlaying ? "pause" : "play", size: 24 })
@@ -393,10 +441,10 @@ function DFCollectionPage({ np }) {
                 t,
                 index: i,
                 active: playingUri === t.uri,
-                playing: np.playing,
+                playing: pend.playing,
                 liked: hearts.isLiked(t),
                 onHeart: hearts.toggle(t),
-                onPlay: () => (playingUri === t.uri ? Spicetify.Player.togglePlay() : dfPlayLiked(t.uri)),
+                onPlay: () => playTrack(t),
               })
             )
           : [0, 1, 2, 3].map((i) => dfH("div", { key: i, className: "df-row df-row--skeleton" }))
@@ -415,7 +463,7 @@ function DFCollectionPage({ np }) {
         ? lists.map((p) =>
             dfH(
               "div",
-              { key: p.uri, className: "df-card", onClick: () => History.push("/playlist/" + p.id), role: "button", tabIndex: 0 },
+              { key: p.uri, className: "df-card" + (pend.ctx === p.uri ? " is-current" : ""), onClick: () => History.push("/playlist/" + p.id), role: "button", tabIndex: 0 },
               dfH(
                 "div",
                 { className: "df-card__img" },
@@ -424,13 +472,13 @@ function DFCollectionPage({ np }) {
                   "button",
                   {
                     className: "df-card__play",
-                    title: "Играть",
+                    title: pend.ctx === p.uri && pend.playing ? "Пауза" : "Играть",
                     onClick: (e) => {
                       e.stopPropagation();
-                      Spicetify.Player.playUri(p.uri);
+                      playCtx(p.uri, () => Spicetify.Player.playUri(p.uri));
                     },
                   },
-                  dfH(DFIcon, { name: "play", size: 20 })
+                  dfH(DFIcon, { name: pend.ctx === p.uri && pend.playing ? "pause" : "play", size: 20 })
                 )
               ),
               dfH("div", { className: "df-card__title" }, p.name),
@@ -476,8 +524,19 @@ function DFLikedPage({ np }) {
   );
   const shown = filtered.slice(0, limit);
   const totalMs = dfUseMemoSafe(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
-  const playingUri = np.track && np.track.uri;
-  const likedPlaying = np.playing && dfIsLikedContext();
+  const pend = dfUsePending(np);
+  const playingUri = pend.uri;
+  const likedCtx = pend.ctx ? /collection/.test(pend.ctx) : false;
+  const likedPlaying = pend.playing && likedCtx;
+  const playTrack = (t) => {
+    if (playingUri === t.uri) {
+      pend.set({ uri: t.uri, playing: !pend.playing });
+      Spicetify.Player.togglePlay();
+    } else {
+      pend.set({ uri: t.uri, playing: true });
+      dfPlayLiked(t.uri);
+    }
+  };
 
   return dfH(
     "div",
@@ -508,7 +567,15 @@ function DFLikedPage({ np }) {
         {
           className: "df-ctl df-ctl--play",
           title: likedPlaying ? "Пауза" : "Играть",
-          onClick: () => (dfIsLikedContext() ? Spicetify.Player.togglePlay() : dfPlayLiked(null)),
+          onClick: () => {
+            if (likedCtx) {
+              pend.set({ ctx: pend.ctx, playing: !pend.playing });
+              Spicetify.Player.togglePlay();
+            } else {
+              pend.set({ ctx: "spotify:collection", playing: true });
+              dfPlayLiked(null);
+            }
+          },
         },
         dfH(DFIcon, { name: likedPlaying ? "pause" : "play", size: 26 })
       ),
@@ -555,10 +622,10 @@ function DFLikedPage({ np }) {
           index: i,
           showAdded: true,
           active: playingUri === t.uri,
-          playing: np.playing,
+          playing: pend.playing,
           liked: hearts.isLiked(t),
           onHeart: hearts.toggle(t),
-          onPlay: () => (playingUri === t.uri ? Spicetify.Player.togglePlay() : dfPlayLiked(t.uri)),
+          onPlay: () => playTrack(t),
         })
       ),
       !all ? [0, 1, 2, 3, 4, 5, 6, 7].map((i) => dfH("div", { key: "s" + i, className: "df-row df-row--skeleton" })) : null,

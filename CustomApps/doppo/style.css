@@ -66,7 +66,7 @@
   100% { transform: scale(1.1) rotate(-3deg) translate3d(-2%, 1%, 0); }
 }
 @keyframes df-fade-in { from { opacity: 0; } }
-@keyframes df-rise { from { opacity: 0; transform: translateY(14px); filter: blur(8px); } }
+@keyframes df-rise { from { opacity: 0; transform: translateY(10px); filter: blur(6px); } }
 
 /* ---------------------------------------------------------------------
    «Мой поток»
@@ -213,9 +213,9 @@
    Экран текста
    --------------------------------------------------------------------- */
 .df-lyrics {
-  position: relative; z-index: 1; min-height: inherit; height: calc(100vh - 190px);
+  position: relative; z-index: 1; min-height: inherit; height: calc(100vh - 200px);
   display: grid; grid-template-columns: minmax(260px, 380px) 1fr; gap: clamp(32px, 5vw, 80px);
-  padding: 28px clamp(28px, 5vw, 72px);
+  padding: 24px clamp(28px, 5vw, 72px) 18px;
   transition: grid-template-columns 0.7s var(--df-ease), gap 0.7s var(--df-ease);
 }
 .df-lyrics--focus { grid-template-columns: 0px 1fr; gap: 0; }
@@ -292,18 +292,18 @@
   color: #fff;
   will-change: transform;
   transition:
-    transform 0.8s var(--df-ease),
-    opacity 0.45s ease,
-    filter 0.45s ease;
+    transform 1.1s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.7s ease,
+    filter 0.7s ease;
 }
 .dfk-text {
-  display: inline-block; transform-origin: left center; transform: scale(0.94);
-  transition: transform 0.6s var(--df-ease), filter 0.5s ease;
+  display: inline-block; transform-origin: left center; transform: scale(0.96);
+  transition: transform 0.9s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease;
 }
-.dfk-line.is-future { opacity: max(0.14, calc(0.55 - var(--dist) * 0.09)); filter: blur(calc(min(var(--dist), 5) * 0.6px)); }
-.dfk-line.is-past { opacity: max(0.1, calc(0.42 - var(--dist) * 0.08)); filter: blur(calc(min(var(--dist), 5) * 0.45px)); }
+.dfk-line.is-future { opacity: max(0.16, calc(0.5 - var(--dist) * 0.08)); filter: blur(calc(min(var(--dist), 4) * 0.35px)); }
+.dfk-line.is-past { opacity: max(0.12, calc(0.38 - var(--dist) * 0.07)); filter: blur(calc(min(var(--dist), 4) * 0.3px)); }
 .dfk-line.is-active { opacity: 1; filter: none; }
-.dfk-line.is-active .dfk-text { transform: scale(1); filter: drop-shadow(0 0 22px rgba(var(--df-glow), 0.38)); }
+.dfk-line.is-active .dfk-text { transform: scale(1); filter: drop-shadow(0 0 18px rgba(var(--df-glow), 0.28)); }
 .dfk-line:hover { opacity: 0.85; filter: none; }
 .dfk.is-manual .dfk-line { opacity: 0.6; filter: none; transition-delay: 0ms !important; }
 .dfk.is-manual .dfk-line.is-active { opacity: 1; }
@@ -312,7 +312,8 @@
 .dfk-w { white-space: pre-wrap; }
 .dfk-line.is-active .dfk-w,
 .dfl-cur .dfk-w {
-  background-image: linear-gradient(90deg, #fff 0%, #fff calc(var(--p, 0%) - 4%), rgba(255, 255, 255, 0.34) calc(var(--p, 0%) + 8%));
+  background-image: linear-gradient(90deg, #fff 0%, #fff calc(var(--p, 0%) - 12%), rgba(255, 255, 255, 0.38) calc(var(--p, 0%) + 14%));
+  background-size: 100% 100%;
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -520,3 +521,29 @@ button.df-row__heart.is-off { color: rgba(255, 255, 255, 0.45); }
 .df-search__clear:hover { color: #fff; }
 .df-sectionhead__count { font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.45); }
 .df-row { content-visibility: auto; contain-intrinsic-size: 62px; }
+
+/* --- текст: без панели кнопок --- */
+.df-lyrics__right > .df-lyrics__ctx { padding-top: 4px; margin-bottom: 6px; min-height: 0; }
+.df-lyrics__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; padding-top: 6px; }
+.df-lyrics__foot .df-lyrics__src { padding: 0; transition: opacity 0.3s ease; }
+.df-focusbtn {
+  all: unset; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: rgba(255, 255, 255, 0.7); background: rgba(255, 255, 255, 0.06);
+  opacity: 0; transform: scale(0.9);
+  transition: opacity 0.35s ease, transform 0.35s var(--df-ease), background 0.2s ease, color 0.2s ease;
+}
+.df-lyrics__right:hover .df-focusbtn, .df-focusbtn.is-on, .df-focusbtn:focus-visible { opacity: 1; transform: none; }
+.df-focusbtn:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.df-lyrics--focus .df-lyrics__ctx b { color: rgba(255, 255, 255, 0.6); }
+
+/* --- мягкие отклики везде --- */
+.df-ctl, .df-side, .df-heart, .df-back, .df-iconbtn, .df-card__play, button.df-row__heart {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), background 0.25s ease, color 0.25s ease, opacity 0.25s ease, box-shadow 0.25s ease;
+}
+.df-ctl:active, .df-side:active, .df-heart:active, .df-iconbtn:active, .df-card__play:active { transform: scale(0.94); }
+.df-ctl svg, .df-card__play svg, .df-row__play svg { transition: transform 0.2s ease; }
+.df-card.is-current .df-card__play { opacity: 1; transform: none; }
+.df-card.is-current .df-card__title { color: var(--df-accent); }
+.df-row { transition: background 0.25s ease; }
+.df-flow, .df-lyrics, .df-page { animation: df-fade-in 0.45s ease both; }
+.df-line-progress__fill, .df-line-progress__knob, .df-pill__fill { transition-duration: 0.3s; transition-timing-function: linear; }
