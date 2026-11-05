@@ -1,0 +1,20 @@
+[
+  {
+    "name": "doppo",
+    "description": "Тёмная тема в стиле doppo: графит, шрифт Onest, большие скругления, белые кнопки и жёлтый акцент. Ничего не скрывает — только перекрашивает родной интерфейс Spotify.",
+    "preview": "docs/preview-flow.png",
+    "readme": "README.md",
+    "usercss": "Themes/Doppo/user.css",
+    "schemes": "Themes/Doppo/color.ini",
+    "authors": [{ "name": "kikobin", "url": "https://github.com/kikobin" }],
+    "tags": ["dark", "minimal", "russian"]
+  },
+  {
+    "name": "doppo · Мой поток",
+    "description": "Приложение «Мой поток»: огромное название трека, обложка в дымке, синхронизированный текст. В комплекте — расширение с блоком навигации doppo и кнопкой в плеере.",
+    "preview": "docs/preview-lyrics.png",
+    "readme": "README.md",
+    "authors": [{ "name": "kikobin", "url": "https://github.com/kikobin" }],
+    "tags": ["lyrics", "now playing", "russian"]
+  }
+]

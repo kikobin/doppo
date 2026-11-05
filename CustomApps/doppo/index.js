@@ -1,6 +1,9 @@
-// doppo-flow — «Мой поток» для Spicetify
+// doppo — кастомное приложение Spicetify «Мой поток»
+// Маршруты: /doppo — поток, /doppo/lyrics — текст песни.
 // Огромное название трека, обложка в дымке, полоса «артист — трек»,
-// лайк, управление и экран синхронизированного текста (LRCLIB / Spotify).
+// лайк, управление и синхронизированный текст (LRCLIB / Spotify).
+// Всё управление идёт через штатный плеер Spotify (Spicetify.Player),
+// поэтому нижний плеер, очередь, устройства и т.д. продолжают работать.
 
 const dfReact = Spicetify.React;
 const dfH = dfReact.createElement;
@@ -508,25 +511,48 @@ function DFLyricsView({ np, progress, onBack }) {
 /* Корень                                                              */
 /* ------------------------------------------------------------------ */
 
+const DF_ROUTE = "/doppo";
+const DF_SETTINGS_KEY = "doppo:settings";
+
+function dfSettings() {
+  try {
+    return Object.assign({ smoke: true }, JSON.parse(localStorage.getItem(DF_SETTINGS_KEY) || "{}"));
+  } catch (e) {
+    return { smoke: true };
+  }
+}
+
+function dfUseRoute() {
+  const History = Spicetify.Platform.History;
+  const [path, setPath] = dfUseState(() => History.location.pathname);
+  dfUseEffect(() => History.listen((loc) => setPath((loc && loc.pathname) || History.location.pathname)), []);
+  return path;
+}
+
 function DoppoFlow() {
   const np = dfUseNowPlaying();
-  const [mode, setMode] = dfUseState(() => localStorage.getItem("doppo-flow:mode") || "flow");
+  const path = dfUseRoute();
+  const mode = path.startsWith(DF_ROUTE + "/lyrics") ? "lyrics" : "flow";
   const progress = dfUseProgress(mode === "lyrics" ? 120 : 400);
+  const [settings, setSettings] = dfUseState(dfSettings);
 
-  const go = (m) => {
-    setMode(m);
-    localStorage.setItem("doppo-flow:mode", m);
-  };
+  dfUseEffect(() => {
+    const onChange = () => setSettings(dfSettings());
+    window.addEventListener("doppo:settings", onChange);
+    return () => window.removeEventListener("doppo:settings", onChange);
+  }, []);
 
-  dfEnsureStyle();
+  const History = Spicetify.Platform.History;
+  const toLyrics = () => History.push(DF_ROUTE + "/lyrics");
+  const toFlow = () => History.push(DF_ROUTE);
 
   return dfH(
     "div",
     { className: "df-root df-root--" + mode },
-    dfH(DFSmoke, { playing: np.playing, focusY: mode === "lyrics" ? 0.45 : 0.5 }),
+    settings.smoke ? dfH(DFSmoke, { playing: np.playing, focusY: mode === "lyrics" ? 0.45 : 0.5 }) : null,
     mode === "lyrics" && np.track
-      ? dfH(DFLyricsView, { np, progress, onBack: () => go("flow") })
-      : dfH(DFFlowView, { np, progress, onLyrics: () => go("lyrics") })
+      ? dfH(DFLyricsView, { np, progress, onBack: toFlow })
+      : dfH(DFFlowView, { np, progress, onLyrics: toLyrics })
   );
 }
 
@@ -534,182 +560,3 @@ function render() {
   return dfH(DoppoFlow, null);
 }
 
-/* ------------------------------------------------------------------ */
-/* Стили                                                               */
-/* ------------------------------------------------------------------ */
-
-function dfEnsureStyle() {
-  if (document.getElementById("doppo-flow-style")) return;
-  const el = document.createElement("style");
-  el.id = "doppo-flow-style";
-  el.textContent = DF_CSS;
-  document.head.appendChild(el);
-}
-
-const DF_CSS = `
-.df-root {
-  --df-font: "Onest", "Inter", "Segoe UI", system-ui, sans-serif;
-  --df-accent: #ffd60a;
-  --df-heart: #ff5c8a;
-  position: relative;
-  min-height: calc(100vh - 160px);
-  height: 100%;
-  overflow: hidden;
-  font-family: var(--df-font);
-  color: #fff;
-  background:
-    radial-gradient(120% 80% at 50% 45%, #2a2a2e 0%, #1b1b1e 45%, #121214 100%);
-  isolation: isolate;
-}
-.df-smoke {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  z-index: 0; pointer-events: none; filter: blur(3px); opacity: 1;
-}
-.df-root button { font-family: inherit; }
-
-/* ---------- поток ---------- */
-.df-flow {
-  position: relative; z-index: 1;
-  min-height: inherit;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 48px 32px 40px; gap: 0;
-  text-align: center;
-}
-.df-badge {
-  padding: 6px 16px; border-radius: 999px;
-  background: rgba(255, 214, 10, .88); color: #241c00;
-  border: 1.5px solid #ffe45c;
-  font-weight: 800; font-size: 15px; letter-spacing: -.01em;
-  box-shadow: 0 0 24px rgba(255, 214, 10, .25);
-}
-.df-title {
-  margin: 14px 0 26px; max-width: min(92%, 1100px);
-  font-size: clamp(48px, 7.4vw, 112px); line-height: .98;
-  font-weight: 800; letter-spacing: -.045em;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  color: #f4f4f2;
-  text-shadow: 0 6px 40px rgba(0,0,0,.35);
-}
-.df-title--m { font-size: clamp(40px, 5.6vw, 86px); }
-.df-title--s { font-size: clamp(30px, 4vw, 60px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.df-cover {
-  width: clamp(200px, 30vh, 380px); aspect-ratio: 1; border-radius: 22px; overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
-  transform: scale(.97); transition: transform .6s cubic-bezier(.2,.8,.2,1);
-  background: #222226;
-}
-.df-cover.is-playing { transform: scale(1); }
-.df-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.df-cover__empty { width: 100%; height: 100%; display: grid; place-items: center; color: rgba(255,255,255,.25); }
-.df-album {
-  margin: 22px 0 18px; font-size: 22px; font-weight: 800; letter-spacing: -.03em;
-  color: rgba(255,255,255,.92); max-width: 80%;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.df-barrow {
-  display: flex; align-items: center; gap: 14px;
-  width: min(760px, 92%);
-}
-.df-pill {
-  position: relative; flex: 1; height: 58px; border-radius: 999px; overflow: hidden; cursor: pointer;
-  background: rgba(255,255,255,.04);
-  border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(14px);
-}
-.df-pill__fill {
-  position: absolute; inset: 0 auto 0 0;
-  background: linear-gradient(90deg, rgba(255,255,255,.10), rgba(255,255,255,.16));
-  border-right: 1px solid rgba(255,255,255,.18);
-  transition: width .35s linear;
-}
-.df-pill__text {
-  position: relative; height: 100%; display: flex; align-items: center; justify-content: center;
-  padding: 0 28px; font-weight: 700; font-size: 15px; color: rgba(255,255,255,.9);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.df-pill:hover { border-color: rgba(255,255,255,.24); }
-.df-side, .df-heart {
-  width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
-  display: grid; place-items: center; cursor: pointer;
-  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
-  color: rgba(255,255,255,.75); transition: all .15s ease;
-}
-.df-side:hover, .df-heart:hover { color: #fff; background: rgba(255,255,255,.1); }
-.df-side:disabled { opacity: .35; cursor: default; }
-.df-heart.is-liked { color: var(--df-heart); }
-.df-heart:active { transform: scale(.9); }
-
-.df-controls { display: flex; align-items: center; justify-content: center; gap: 22px; margin-top: 22px; }
-.df-ctl {
-  width: 46px; height: 46px; border-radius: 50%; border: 0; cursor: pointer;
-  display: grid; place-items: center; color: rgba(255,255,255,.85); background: transparent;
-  transition: transform .12s ease, color .15s ease, background .15s ease;
-}
-.df-ctl:hover { color: #fff; background: rgba(255,255,255,.06); }
-.df-ctl:active { transform: scale(.92); }
-.df-ctl--play {
-  width: 58px; height: 58px; background: #fff; color: #000;
-  box-shadow: 0 10px 30px rgba(0,0,0,.35);
-}
-.df-ctl--play:hover { background: #fff; color: #000; transform: scale(1.05); }
-.df-controls--big .df-ctl--play { width: 64px; height: 64px; }
-.df-context { margin-top: 18px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.45); }
-
-/* ---------- текст ---------- */
-.df-lyrics {
-  position: relative; z-index: 1; min-height: inherit; height: calc(100vh - 160px);
-  display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: clamp(32px, 5vw, 80px);
-  padding: 40px clamp(28px, 5vw, 72px);
-}
-.df-lyrics__left { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-.df-back {
-  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
-  margin-bottom: 22px; padding: 7px 14px 7px 10px; border-radius: 999px; cursor: pointer;
-  border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.05);
-  color: rgba(255,255,255,.8); font-weight: 700; font-size: 13px;
-}
-.df-back:hover { color: #fff; background: rgba(255,255,255,.1); }
-.df-lcover { width: 100%; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: #222226;
-  box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06); }
-.df-lcover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.df-lmeta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 14px; }
-.df-lmeta__text { min-width: 0; }
-.df-lmeta .df-heart { background: transparent; border-color: transparent; }
-.df-ltitle { font-size: 22px; font-weight: 800; letter-spacing: -.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.df-lartist { margin-top: 2px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: rgba(255,255,255,.55); }
-.df-line-progress { position: relative; height: 18px; cursor: pointer; }
-.df-line-progress::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.18); }
-.df-line-progress__fill { position: absolute; left: 0; top: 7px; height: 4px; border-radius: 4px; background: #fff; }
-.df-line-progress__knob { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px rgba(255,255,255,.5); }
-.df-times { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: rgba(255,255,255,.55); margin-top: 2px; }
-.df-lyrics .df-controls { margin-top: 10px; }
-
-.df-lyrics__right { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.df-lyrics__ctx { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; margin-bottom: 10px; }
-.df-lyrics__ctx small { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.5); }
-.df-lyrics__ctx b { font-size: 26px; font-weight: 800; letter-spacing: -.03em; color: rgba(255,255,255,.28); }
-.df-lyrics__lines {
-  flex: 1; overflow-y: auto; scrollbar-width: none; padding: 30vh 0 40vh;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 70%, transparent 100%);
-          mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 70%, transparent 100%);
-}
-.df-lyrics__lines::-webkit-scrollbar { display: none; }
-.df-lyrics__lines.is-plain { padding: 4vh 0 10vh; }
-.df-line {
-  font-size: clamp(28px, 3.4vw, 54px); line-height: 1.1; font-weight: 800; letter-spacing: -.035em;
-  color: rgba(255,255,255,.3); margin: 0 0 .45em; cursor: pointer;
-  transform-origin: left center; transition: color .35s ease, transform .35s ease, filter .35s ease;
-  filter: blur(.4px);
-}
-.df-line.is-past { color: rgba(255,255,255,.42); }
-.df-line.is-active { color: #fff; transform: scale(1.04); filter: none; text-shadow: 0 0 30px rgba(255,255,255,.18); }
-.df-line:hover { color: rgba(255,255,255,.75); }
-.df-lyrics__lines.is-plain .df-line { color: rgba(255,255,255,.85); cursor: default; filter: none; font-size: clamp(22px, 2.4vw, 36px); }
-.df-lyrics__src { padding-top: 8px; font-size: 12px; font-weight: 600; color: rgba(255,255,255,.4); }
-.df-lyrics__msg { margin: auto 0; font-size: 28px; font-weight: 800; letter-spacing: -.03em; color: rgba(255,255,255,.35); }
-
-@media (max-width: 900px) {
-  .df-lyrics { grid-template-columns: 1fr; height: auto; }
-  .df-lyrics__lines { max-height: 60vh; padding: 10vh 0 20vh; }
-}
-`;

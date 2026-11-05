@@ -1,30 +1,38 @@
-/* ============================================================
+/* =====================================================================
    doppo — тема для Spicetify
-   Тёмный графит, жирная гротесковая типографика, большие
-   скругления, белые кнопки и жёлтый акцент.
-   ============================================================ */
+   ---------------------------------------------------------------------
+   Только внешний вид. Тема НИЧЕГО не скрывает и не убирает: все
+   кнопки, меню, панели и функции Spotify остаются на своих местах.
+
+   Селекторы опираются на стабильные имена классов, которые Spicetify
+   подставляет вместо хэшей Spotify (css-map.json), плюс data-testid
+   и Encore-переменные — так тема переживает обновления клиента.
+   ===================================================================== */
 
 @import url("https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800;900&display=swap");
 
 :root {
   --doppo-font: "Onest", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --doppo-bg: #0c0c0e;
-  --doppo-panel: #17171a;
-  --doppo-panel-2: #1f1f23;
+  --doppo-panel: var(--spice-main);
   --doppo-line: rgba(255, 255, 255, 0.07);
+  --doppo-glass: rgba(255, 255, 255, 0.06);
+  --doppo-glass-hover: rgba(255, 255, 255, 0.1);
   --doppo-accent: #ffd60a;
   --doppo-accent-ink: #1d1700;
   --doppo-heart: #ff5c8a;
   --doppo-radius: 22px;
+  --doppo-radius-md: 16px;
   --doppo-radius-sm: 12px;
 
-  /* шрифты Encore (дизайн-система Spotify) */
   --encore-title-font-stack: var(--doppo-font) !important;
   --encore-body-font-stack: var(--doppo-font) !important;
   --encore-variable-font-stack: var(--doppo-font) !important;
 }
 
-/* ---------- Encore: перекрашиваем базовые наборы ---------- */
+/* ---------------------------------------------------------------------
+   1. Encore — палитра дизайн-системы Spotify
+   --------------------------------------------------------------------- */
 .encore-dark-theme,
 .encore-dark-theme .encore-base-set {
   --background-base: var(--spice-main) !important;
@@ -32,31 +40,37 @@
   --background-press: #101012 !important;
   --background-elevated-base: var(--spice-main-elevated) !important;
   --background-elevated-highlight: var(--spice-highlight-elevated) !important;
+  --background-elevated-press: #19191c !important;
   --background-tinted-base: rgba(255, 255, 255, 0.07) !important;
   --background-tinted-highlight: rgba(255, 255, 255, 0.11) !important;
-  --text-base: #fff !important;
+  --background-tinted-press: rgba(255, 255, 255, 0.14) !important;
+  --text-base: #ffffff !important;
   --text-subdued: var(--spice-subtext) !important;
   --text-bright-accent: var(--doppo-accent) !important;
+  --essential-base: #ffffff !important;
+  --essential-subdued: #6f6f76 !important;
   --essential-bright-accent: var(--doppo-accent) !important;
+  --decorative-base: #ffffff !important;
   --decorative-subdued: var(--doppo-line) !important;
 }
 
-/* Зелёные кнопки Spotify → белые круглые, как в doppo */
-.encore-dark-theme .encore-bright-accent-set,
+/* зелёные кнопки Spotify → белые, как в doppo */
 .encore-bright-accent-set {
   --background-base: #ffffff !important;
   --background-highlight: #f2f2f2 !important;
   --background-press: #dcdcdc !important;
-  --text-base: #000 !important;
+  --text-base: #000000 !important;
+  --essential-base: #000000 !important;
 }
 
-/* ---------- Типографика ---------- */
+/* ---------------------------------------------------------------------
+   2. Типографика
+   --------------------------------------------------------------------- */
 body,
 button,
 input,
 textarea,
 select,
-.encore-text,
 [class*="encore-text"] {
   font-family: var(--doppo-font) !important;
   -webkit-font-smoothing: antialiased;
@@ -64,11 +78,12 @@ select,
 
 h1, h2, h3,
 .main-entityHeader-title,
-[data-testid="entityTitle"],
-.encore-text-headline-large,
-.encore-text-headline-medium,
-.encore-text-title-large,
-.encore-text-title-medium {
+.main-shelf-title,
+.main-cardHeader-text,
+[data-encore-id="type"].encore-text-headline-large,
+[data-encore-id="type"].encore-text-headline-medium,
+[data-encore-id="type"].encore-text-title-large,
+[data-encore-id="type"].encore-text-title-medium {
   font-family: var(--doppo-font) !important;
   font-weight: 800 !important;
   letter-spacing: -0.035em !important;
@@ -76,18 +91,22 @@ h1, h2, h3,
 
 .main-entityHeader-title h1,
 [data-testid="entityTitle"] h1 {
-  font-size: clamp(42px, 6vw, 96px) !important;
+  font-size: clamp(44px, 6.5vw, 104px) !important;
   line-height: 0.95 !important;
 }
 
-/* ---------- Каркас окна ---------- */
+.main-cardHeader-text,
+.main-card-cardTitle,
+.main-trackList-rowTitle {
+  font-weight: 700 !important;
+}
+
+/* ---------------------------------------------------------------------
+   3. Каркас окна: панели со скруглениями на тёмном фоне
+   --------------------------------------------------------------------- */
 body,
 .Root__top-container {
   background: var(--doppo-bg) !important;
-}
-
-.Root__top-container {
-  gap: 8px;
 }
 
 .Root__nav-bar,
@@ -98,60 +117,144 @@ body,
   overflow: hidden;
 }
 
-.Root__main-view,
-.Root__right-sidebar > * {
+.Root__main-view {
   background: var(--doppo-panel) !important;
-  border: 1px solid var(--doppo-line);
+  box-shadow: inset 0 0 0 1px var(--doppo-line);
 }
 
 .Root__nav-bar,
 #Desktop_LeftSidebar_Id,
-#Desktop_LeftSidebar_Id nav {
+#Desktop_LeftSidebar_Id nav,
+.main-yourLibraryX-library {
   background: var(--spice-sidebar) !important;
 }
 
-/* убираем цветные градиенты Spotify за шапками */
-.main-entityHeader-backgroundColor,
-.main-entityHeader-overlay,
-.main-actionBarBackground-background,
-.main-topBar-background,
-[data-testid="background-image"] {
-  background: transparent !important;
-  background-image: none !important;
+.Root__right-sidebar,
+.Root__right-sidebar aside {
+  background: var(--spice-sidebar) !important;
 }
 
-.main-topBar-container,
+/* верхняя полоса Spotify остаётся, но без «шапки» цвета обложки */
+.main-topBar-background,
 .main-topBar-overlay {
   background: transparent !important;
 }
 
-/* ---------- Сайдбар ---------- */
+.main-actionBarBackground-background {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+/* шапка плейлиста/альбома: оставляем цвет обложки, но притемняем его */
+.main-entityHeader-backgroundColor {
+  filter: saturate(0.55) brightness(0.55);
+}
+
+.main-entityHeader-overlay {
+  background: linear-gradient(180deg, transparent 0%, var(--doppo-panel) 100%) !important;
+}
+
+/* ---------------------------------------------------------------------
+   4. Верхняя панель (Главная, поиск, кастомные приложения, профиль)
+   --------------------------------------------------------------------- */
+.Root__globalNav {
+  background: transparent !important;
+}
+
+.main-globalNav-navLink,
+.main-globalNav-historyButtons button,
+.main-topBar-button,
+.main-topBar-historyButtons button,
+.custom-navlink {
+  border-radius: 999px !important;
+  background: var(--doppo-glass) !important;
+  transition: background 0.15s ease;
+}
+
+.main-globalNav-navLink:hover,
+.main-topBar-button:hover,
+.custom-navlink:hover {
+  background: var(--doppo-glass-hover) !important;
+}
+
+.main-globalNav-navLinkActive {
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+/* ссылка на кастомное приложение «Мой поток» — с жёлтым акцентом */
+.custom-navlink[href="/doppo"],
+.custom-navlink[aria-label="Мой поток"],
+.custom-navlink[aria-label="My Flow"] {
+  background: rgba(255, 214, 10, 0.12) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 10, 0.45);
+}
+
+.main-globalNav-searchInputContainer input,
+.main-globalNav-searchSection input,
+form[role="search"] input,
+input[data-testid="search-input"],
+[data-encore-id="formInput"] {
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  box-shadow: inset 0 0 0 1px var(--doppo-line) !important;
+  font-weight: 600 !important;
+}
+
+.main-globalNav-searchInputContainer input:focus,
+form[role="search"] input:focus {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ---------------------------------------------------------------------
+   5. Библиотека (левая панель)
+   --------------------------------------------------------------------- */
+.main-yourLibraryX-header {
+  font-weight: 800;
+}
+
 .main-yourLibraryX-listItem,
+.main-yourLibraryX-listItem [role="button"],
+.main-yourLibraryX-listRowLink,
 [data-encore-id="listRow"] {
   border-radius: var(--doppo-radius-sm) !important;
 }
 
+.main-yourLibraryX-listRowEntityImage,
 .main-yourLibraryX-listItem img,
-[data-encore-id="listRow"] img,
-.main-yourLibraryX-listItem .main-image-image {
+[data-encore-id="listRow"] img {
   border-radius: 10px !important;
 }
 
-/* чипсы-фильтры (Плейлисты, Артисты…) */
-[role="tablist"] button,
-.search-searchCategory-categoryGrid button,
-button[class*="Chip"] {
-  border-radius: 999px !important;
+.main-yourLibraryX-listItem .x-entityImage-circle,
+.main-yourLibraryX-listItem .x-entityImage-circle img {
+  border-radius: 50% !important;
 }
 
-/* ---------- Списки треков ---------- */
+/* чипсы «Плейлисты / Артисты / Альбомы…» */
+.main-yourLibraryX-filters button,
+.main-home-filterChipsContainer button,
+[role="tablist"] button,
+[data-encore-id="chip"] {
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+}
+
+/* ---------------------------------------------------------------------
+   6. Списки треков
+   --------------------------------------------------------------------- */
+.main-trackList-trackListHeader {
+  background: transparent !important;
+  border-bottom: 1px solid var(--doppo-line) !important;
+}
+
 .main-trackList-trackListRow {
   border-radius: 14px !important;
   transition: background 0.15s ease;
 }
 
 .main-trackList-trackListRow:hover,
-.main-trackList-trackListRow[aria-selected="true"] {
+.main-trackList-trackListRow[aria-selected="true"],
+.main-trackList-selected {
   background: rgba(255, 255, 255, 0.06) !important;
 }
 
@@ -160,16 +263,14 @@ button[class*="Chip"] {
   border-radius: 10px !important;
 }
 
-.main-trackList-trackListHeader {
-  background: transparent !important;
-  border-bottom: 1px solid var(--doppo-line) !important;
-}
-
-/* ---------- Карточки и обложки ---------- */
+/* ---------------------------------------------------------------------
+   7. Карточки, полки, обложки
+   --------------------------------------------------------------------- */
 .main-card-card,
 [data-encore-id="card"] {
   border-radius: 20px !important;
   background: transparent !important;
+  transition: background 0.2s ease;
 }
 
 .main-card-card:hover,
@@ -178,40 +279,76 @@ button[class*="Chip"] {
 }
 
 .main-card-imageContainer,
-.main-card-imageContainer img,
-.main-image-image,
+.main-cardImage-imageWrapper,
+.main-cardImage-image,
 .main-entityHeader-image,
 .main-entityHeader-imagePlaceholder,
-.main-coverSlotExpanded-container img {
+.x-entityImage-square,
+.x-entityImage-square img {
   border-radius: 16px !important;
 }
 
-/* круглые аватары артистов оставляем круглыми */
-.main-entityHeader-imageContainer.main-entityHeader-imageContainer--circle img,
-.main-card-imageContainer[style*="50%"] img,
-[class*="artist"] .main-image-image[style*="50%"] {
+.main-entityHeader-image {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55) !important;
+}
+
+.main-cardImage-circular,
+.main-cardImage-circular img,
+.main-entityHeader-circle,
+.x-entityImage-circle,
+.x-entityImage-circle img {
   border-radius: 50% !important;
 }
 
-/* ---------- Нижний плеер ---------- */
+/* круглая белая кнопка Play с тенью */
+.main-playButton-PlayButton button,
+.main-playButton-primary,
+[data-testid="play-button"] > span {
+  border-radius: 50% !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* ---------------------------------------------------------------------
+   8. Поиск: плитки жанров
+   --------------------------------------------------------------------- */
+.search-searchCategory-categoryGridItem,
+.search-searchCategory-categoryGridItem > div,
+[data-testid="search-category-card"] {
+  border-radius: 18px !important;
+  overflow: hidden;
+}
+
+.search-searchCategory-categoryGridItem img {
+  border-radius: 12px !important;
+}
+
+.search-searchResult-topResultCard {
+  border-radius: 22px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* ---------------------------------------------------------------------
+   9. Нижний плеер (все кнопки на месте — только форма)
+   --------------------------------------------------------------------- */
 .Root__now-playing-bar,
-footer[data-testid="now-playing-bar"],
-[data-testid="now-playing-bar"] {
+footer[data-testid="now-playing-bar"] {
   background: transparent !important;
 }
 
 .main-nowPlayingBar-nowPlayingBar,
-[data-testid="now-playing-bar"] > div {
+.main-nowPlayingBar-container {
   background: var(--spice-player) !important;
   border-radius: var(--doppo-radius) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
+.main-nowPlayingWidget-coverArt,
 .main-nowPlayingWidget-coverArt img,
 [data-testid="now-playing-widget"] img {
-  border-radius: 10px !important;
+  border-radius: 12px !important;
 }
 
-/* прогресс-бар: белый и толще */
+/* прогресс и громкость — белые и потолще */
 .x-progressBar-progressBarBg,
 .progress-bar {
   --bg-color: rgba(255, 255, 255, 0.16) !important;
@@ -221,59 +358,90 @@ footer[data-testid="now-playing-bar"],
 }
 
 .x-progressBar-fillColor {
-  background-color: #fff !important;
+  background-color: #ffffff !important;
 }
 
-/* лайк — розовое сердце */
-button[data-testid="add-button"][aria-checked="true"],
-button[aria-checked="true"].control-button-heart,
-.main-addButton-active {
-  color: var(--doppo-heart) !important;
+.playback-bar__progress-time-elapsed,
+[data-testid="playback-position"],
+[data-testid="playback-duration"] {
+  font-weight: 600 !important;
 }
 
-button[data-testid="add-button"][aria-checked="true"] svg,
-.main-addButton-active svg {
-  fill: var(--doppo-heart) !important;
+/* ---------------------------------------------------------------------
+   10. Правая панель (Now Playing View, очередь, друзья)
+   --------------------------------------------------------------------- */
+.main-nowPlayingView-coverArt,
+.main-nowPlayingView-coverArt img,
+.main-nowPlayingView-coverArtContainer {
+  border-radius: 18px !important;
 }
 
-/* ---------- Кнопки ---------- */
-.encore-dark-theme button[data-encore-id="buttonPrimary"] > span,
-button[data-encore-id="buttonPrimary"] > span {
-  border-radius: 999px !important;
+.main-nowPlayingView-section,
+.main-nowPlayingView-aboutArtistV2,
+.main-nowPlayingView-credits,
+.main-nowPlayingView-queue {
+  border-radius: var(--doppo-radius-md) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
 }
 
-button[data-encore-id="buttonSecondary"] {
-  border-radius: 999px !important;
-}
-
-/* ---------- Поиск ---------- */
-input[data-encore-id="formInput"],
-form[role="search"] input,
-[data-testid="search-input"] {
-  border-radius: 999px !important;
-  background: rgba(255, 255, 255, 0.07) !important;
-  box-shadow: inset 0 0 0 1px var(--doppo-line) !important;
-}
-
-/* ---------- Текст песни (встроенный экран Spotify) ---------- */
-[class*="lyrics-lyrics-container"],
-.lyrics-lyrics-container {
+/* ---------------------------------------------------------------------
+   11. Родной экран текста Spotify — крупный жирный текст
+   --------------------------------------------------------------------- */
+.lyrics-lyrics-container,
+.lyrics-lyrics-background {
   --lyrics-color-active: #ffffff !important;
-  --lyrics-color-inactive: rgba(255, 255, 255, 0.32) !important;
-  --lyrics-color-passed: rgba(255, 255, 255, 0.55) !important;
+  --lyrics-color-inactive: rgba(255, 255, 255, 0.3) !important;
+  --lyrics-color-passed: rgba(255, 255, 255, 0.45) !important;
   --lyrics-color-background: var(--doppo-panel) !important;
+  --lyrics-color-messaging: rgba(255, 255, 255, 0.7) !important;
   background: var(--doppo-panel) !important;
 }
 
-[class*="lyrics-lyricsContent-lyric"] {
+.lyrics-lyricsContent-lyric {
   font-family: var(--doppo-font) !important;
   font-weight: 800 !important;
-  letter-spacing: -0.03em !important;
-  font-size: clamp(28px, 3.2vw, 46px) !important;
-  line-height: 1.12 !important;
+  letter-spacing: -0.035em !important;
+  font-size: clamp(28px, 3.4vw, 52px) !important;
+  line-height: 1.1 !important;
 }
 
-/* ---------- Мелочи ---------- */
+.lyrics-lyricsContent-active {
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.18);
+}
+
+.lyrics-lyricsContent-provider {
+  font-weight: 600 !important;
+  opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------------
+   12. Меню, подсказки, модалки, уведомления, скроллбары
+   --------------------------------------------------------------------- */
+#context-menu ul,
+.main-contextMenu-menu,
+[data-tippy-root] [role="menu"] {
+  background: #1d1d21 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 0 0 1px var(--doppo-line), 0 20px 50px rgba(0, 0, 0, 0.55) !important;
+}
+
+#context-menu li button,
+#context-menu li a,
+.main-contextMenu-menuItemButton {
+  border-radius: 10px !important;
+}
+
+.main-trackCreditsModal-container,
+.GenericModal > div,
+[role="dialog"] > div {
+  border-radius: var(--doppo-radius) !important;
+}
+
+[data-tippy-root] .tippy-box {
+  border-radius: 10px !important;
+  font-weight: 600;
+}
+
 ::selection {
   background: var(--doppo-accent);
   color: var(--doppo-accent-ink);
@@ -283,102 +451,4 @@ form[role="search"] input,
 .os-scrollbar-handle {
   background: rgba(255, 255, 255, 0.14) !important;
   border-radius: 999px !important;
-}
-
-/* контекстные меню и всплывашки */
-.main-contextMenu-menu,
-#context-menu ul,
-[data-tippy-root] > div {
-  background: #1d1d21 !important;
-  border-radius: 16px !important;
-  border: 1px solid var(--doppo-line);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55) !important;
-}
-
-/* ============================================================
-   Боковое меню doppo (вставляется theme.js)
-   ============================================================ */
-.doppo-nav {
-  container-type: inline-size;
-  padding: 18px 12px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.doppo-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 10px 18px;
-  color: #f2f2ee;
-  text-decoration: none;
-  cursor: pointer;
-  user-select: none;
-}
-
-.doppo-logo svg {
-  width: 34px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-.doppo-logo span {
-  font-family: var(--doppo-font);
-  font-weight: 700;
-  font-size: 30px;
-  letter-spacing: -0.05em;
-  line-height: 1;
-}
-
-.doppo-nav__item {
-  all: unset;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  color: rgba(255, 255, 255, 0.82);
-  font-family: var(--doppo-font);
-  font-weight: 700;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.doppo-nav__item svg {
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-}
-
-.doppo-nav__item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-
-.doppo-nav__item.is-active {
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
-}
-
-.doppo-nav__divider {
-  height: 1px;
-  background: var(--doppo-line);
-  margin: 10px 8px 4px;
-}
-
-/* сайдбар свёрнут — только иконки */
-@container (max-width: 140px) {
-  .doppo-logo span,
-  .doppo-nav__label {
-    display: none;
-  }
-  .doppo-logo,
-  .doppo-nav__item {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-  }
 }
