@@ -34,7 +34,7 @@ macOS / Linux:
 ### Вручную
 
 Скопируй `Themes/Doppo` в папку `Themes`, а `CustomApps/doppo-flow` — в `CustomApps` папки Spicetify
-(путь к ней покажет `spicetify path userdata`, а к конфигу — `spicetify -c`), затем:
+(это папка, где лежит конфиг из `spicetify -c`), затем:
 
 ```bash
 spicetify config current_theme Doppo color_scheme doppo inject_css 1 replace_colors 1 inject_theme_js 1
@@ -56,15 +56,11 @@ spicetify apply
 
 ## Удаление
 
-```bash
-spicetify config current_theme marketplace custom_apps doppo-flow-
-```
+Вернуть чистый Spotify:
 
 ```bash
-spicetify apply
+spicetify restore
 ```
-
-(или `spicetify restore`, чтобы вернуть чистый Spotify).
 
 ## Важно
 
