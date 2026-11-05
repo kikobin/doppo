@@ -32,10 +32,15 @@ function dfReadTrack() {
   let artists = Array.isArray(item.artists) && item.artists.length ? item.artists.map((a) => a.name) : [];
   if (!artists.length) artists = [m.artist_name, m["artist_name:1"], m["artist_name:2"]].filter(Boolean);
   const albumImages = (item.album && item.album.images) || item.images || [];
+  let artistUris = Array.isArray(item.artists) ? item.artists.map((a) => a.uri || "") : [];
+  if (!artistUris.length) artistUris = [m.artist_uri, m["artist_uri:1"], m["artist_uri:2"]].filter(Boolean);
   return {
     uri: item.uri || "",
     title: item.name || m.title || "",
     artists,
+    artistUris,
+    albumUri: (item.album && item.album.uri) || m.album_uri || "",
+    contextUri: (data.context && data.context.uri) || data.context_uri || "",
     album: (item.album && item.album.name) || m.album_title || "",
     cover: dfImg(m.image_xlarge_url || m.image_large_url || m.image_url || (albumImages[0] && albumImages[0].url)),
     duration: Spicetify.Player.getDuration() || Number(m.duration) || (item.duration && item.duration.milliseconds) || 0,
@@ -488,6 +493,82 @@ function DFUpNext({ next }) {
 /* Экран «Мой поток»                                                   */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Ссылки и перемотка                                                  */
+/* ------------------------------------------------------------------ */
+
+// spotify:album:ID → /album/ID; «Мне нравится» → наша страница
+function dfUriToPath(uri) {
+  if (!uri) return null;
+  if (/:collection(:|$)|^spotify:collection/.test(uri)) return DF_ROUTE + "/liked";
+  const m = /^spotify:(album|artist|playlist|show|episode|track):([A-Za-z0-9]+)$/.exec(uri);
+  if (m) return "/" + m[1] + "/" + m[2];
+  const u = /^spotify:user:[^:]+:playlist:([A-Za-z0-9]+)$/.exec(uri);
+  if (u) return "/playlist/" + u[1];
+  return null;
+}
+
+function DFLink({ uri, className, title, children }) {
+  const path = dfUriToPath(uri);
+  if (!path) return dfH("span", { className }, children);
+  return dfH(
+    "a",
+    {
+      className: "df-a" + (className ? " " + className : ""),
+      href: "#",
+      title,
+      onClick: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        Spicetify.Platform.History.push(path);
+      },
+    },
+    children
+  );
+}
+
+function DFArtists({ names, uris, className }) {
+  return dfH(
+    "div",
+    { className },
+    names.map((n, i) =>
+      dfH(
+        Spicetify.React.Fragment,
+        { key: i },
+        i ? ", " : null,
+        uris && uris[i] ? dfH(DFLink, { uri: uris[i], title: "Открыть исполнителя" }, n) : n
+      )
+    )
+  );
+}
+
+// полоса с перемоткой: при наведении видно, куда прыгнешь
+function DFSeekable({ className, duration, children }) {
+  const [hover, setHover] = dfUseState(null);
+  const at = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  };
+  return dfH(
+    "div",
+    {
+      className: className + " df-seek",
+      onMouseMove: (e) => duration && setHover(at(e)),
+      onMouseLeave: () => setHover(null),
+      onClick: (e) => duration && DFClock.seek(at(e) * duration),
+    },
+    children,
+    hover != null
+      ? dfH(
+          Spicetify.React.Fragment,
+          null,
+          dfH("div", { className: "df-seek__line", style: { left: hover * 100 + "%" } }),
+          dfH("div", { className: "df-seek__tip", style: { left: hover * 100 + "%" } }, dfTime(hover * duration))
+        )
+      : null
+  );
+}
+
 function DFFlowView({ np, progress, lyrics, onLyrics }) {
   const t = np.track;
   const pct = t && t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
@@ -505,9 +586,12 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
       { className: "df-cover" + (np.playing ? " is-playing" : ""), onClick: t ? onLyrics : undefined, title: t ? "Открыть текст" : "" },
       t && t.cover
         ? dfH("img", { src: t.cover, alt: "", draggable: false, key: t.cover })
-        : dfH("div", { className: "df-cover__empty" }, dfH(DFIcon, { name: "play", size: 64 }))
+        : dfH("div", { className: "df-cover__empty" }, dfH(DFIcon, { name: "play", size: 64 })),
+      t ? dfH("div", { className: "df-cover__hint" }, dfH(DFIcon, { name: "lyrics", size: 22 }), "Текст") : null
     ),
-    dfH("div", { className: "df-album" }, t ? t.album : "Включи что-нибудь — и поток подхватит"),
+    t && t.albumUri
+      ? dfH(DFLink, { className: "df-album", uri: t.albumUri, title: "Открыть альбом" }, t.album)
+      : dfH("div", { className: "df-album" }, t ? t.album : "Включи что-нибудь — и поток подхватит"),
     dfH(
       "div",
       { className: "df-barrow" },
@@ -517,16 +601,23 @@ function DFFlowView({ np, progress, lyrics, onLyrics }) {
         dfH(DFIcon, { name: "lyrics", size: 20 })
       ),
       dfH(
-        "div",
-        { className: "df-pill", onClick: (e) => t && dfSeekFromEvent(e, t.duration) },
-        dfH("div", { className: "df-pill__fill", style: { width: pct + "%" } }),
+        DFSeekable,
+        { className: "df-pill", duration: t && t.duration },
+        dfH("div", { className: "df-pill__clip" }, dfH("div", { className: "df-pill__fill", style: { width: pct + "%" } })),
         dfH("div", { className: "df-pill__text" }, t ? (t.artists.join(", ") || "—") + " — " + t.title : "Нажми ▶ чтобы запустить поток")
       ),
       dfH(DFHeart, { liked: np.liked, onClick: np.toggleLike })
     ),
     live ? dfH(DFLiveLine, { data: lyrics.data, onOpen: onLyrics, key: t.uri }) : null,
     dfH(DFControls, { playing: np.playing, hasTrack: !!t, big: true }),
-    t && t.context ? dfH("div", { className: "df-context" }, "Играет из: " + t.context) : null
+    t && t.context
+      ? dfH(
+          "div",
+          { className: "df-context" },
+          "Играет из: ",
+          t.contextUri ? dfH(DFLink, { uri: t.contextUri, title: "Открыть" }, t.context) : t.context
+        )
+      : null
   );
 }
 
@@ -596,12 +687,12 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
       dfH(
         "div",
         { className: "df-lmeta" },
-        dfH("div", { className: "df-lmeta__text" }, dfH("div", { className: "df-ltitle" }, t.title), dfH("div", { className: "df-lartist" }, t.artists.join(", "))),
+        dfH("div", { className: "df-lmeta__text" }, dfH("div", { className: "df-ltitle" }, t.title), dfH(DFArtists, { className: "df-lartist", names: t.artists, uris: t.artistUris })),
         dfH(DFHeart, { liked: np.liked, onClick: np.toggleLike })
       ),
       dfH(
-        "div",
-        { className: "df-line-progress", onClick: (e) => dfSeekFromEvent(e, t.duration) },
+        DFSeekable,
+        { className: "df-line-progress", duration: t.duration },
         dfH("div", { className: "df-line-progress__fill", style: { width: pct + "%" } }),
         dfH("div", { className: "df-line-progress__knob", style: { left: pct + "%" } })
       ),

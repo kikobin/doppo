@@ -29,7 +29,9 @@ const DFLib = (() => {
       uri: t.uri,
       title: t.name,
       artists: (t.artists || []).map((a) => a.name),
+      artistUris: (t.artists || []).map((a) => a.uri || ""),
       album: (t.album && t.album.name) || "",
+      albumUri: (t.album && t.album.uri) || "",
       cover: img(t.album && t.album.images),
       duration: (t.duration && t.duration.milliseconds) || t.duration_ms || 0,
       addedAt: ts(t.addedAt),
@@ -44,7 +46,9 @@ const DFLib = (() => {
       uri: t.uri,
       title: t.name,
       artists: (t.artists || []).map((a) => a.name),
+      artistUris: (t.artists || []).map((a) => a.uri || ""),
       album: (t.album && t.album.name) || "",
+      albumUri: (t.album && t.album.uri) || "",
       cover: img(t.album && t.album.images),
       duration: t.duration_ms || 0,
       addedAt: ts(it.added_at),
@@ -301,6 +305,7 @@ function DFTrackRow({ t, index, active, playing, onPlay, showAdded, liked, onHea
   return dfH(
     "div",
     {
+      "data-uri": t.uri,
       className: "df-row" + (active ? " is-active" : "") + (liked === false ? " is-unliked" : "") + (t.playable === false ? " is-disabled" : ""),
       onDoubleClick: onPlay,
       role: "row",
@@ -316,9 +321,14 @@ function DFTrackRow({ t, index, active, playing, onPlay, showAdded, liked, onHea
       "div",
       { className: "df-row__info" },
       dfH("div", { className: "df-row__title" }, t.title),
-      dfH("div", { className: "df-row__artist" }, t.explicit ? dfH("span", { className: "df-e" }, "E") : null, t.artists.join(", "))
+      dfH(
+        "div",
+        { className: "df-row__artist" },
+        t.explicit ? dfH("span", { className: "df-e" }, "E") : null,
+        dfH(DFArtists, { className: "df-row__artists", names: t.artists, uris: t.artistUris })
+      )
     ),
-    dfH("div", { className: "df-row__album" }, t.album),
+    dfH("div", { className: "df-row__album" }, t.albumUri ? dfH(DFLink, { uri: t.albumUri, title: "Открыть альбом" }, t.album) : t.album),
     showAdded ? dfH("div", { className: "df-row__added" }, dfAgo(t.addedAt)) : null,
     dfH(
       "button",
@@ -501,6 +511,7 @@ function DFLikedPage({ np }) {
   const user = dfUseCached(DFLib.me);
   const hearts = dfUseHearts();
   const [query, setQuery] = dfUseState("");
+  const [sort, setSort] = dfUseState(() => localStorage.getItem("doppo:liked-sort") || "added");
   const [limit, setLimit] = dfUseState(DF_PAGE_STEP);
   const [shuffle, setShuffle] = dfUseState(() => !!Spicetify.Player.getShuffle());
   const sentinel = dfUseRef(null);
@@ -518,10 +529,20 @@ function DFLikedPage({ np }) {
 
   const tracks = all || [];
   const q = query.trim().toLowerCase();
-  const filtered = dfUseMemoSafe(
-    () => (q ? tracks.filter((t) => (t.title + " " + t.artists.join(" ") + " " + t.album).toLowerCase().includes(q)) : tracks),
-    [tracks, q]
-  );
+  const filtered = dfUseMemoSafe(() => {
+    const list = q ? tracks.filter((t) => (t.title + " " + t.artists.join(" ") + " " + t.album).toLowerCase().includes(q)) : tracks.slice();
+    const by = (f) => (a, b) => f(a).localeCompare(f(b), "ru", { sensitivity: "base" });
+    if (sort === "title") list.sort(by((t) => t.title));
+    else if (sort === "artist") list.sort(by((t) => t.artists[0] || ""));
+    else if (sort === "album") list.sort(by((t) => t.album));
+    else if (sort === "duration") list.sort((a, b) => a.duration - b.duration);
+    return list;
+  }, [tracks, q, sort]);
+  const setSortSaved = (v) => {
+    localStorage.setItem("doppo:liked-sort", v);
+    setSort(v);
+    setLimit(DF_PAGE_STEP);
+  };
   const shown = filtered.slice(0, limit);
   const totalMs = dfUseMemoSafe(() => tracks.reduce((s, t) => s + t.duration, 0), [tracks]);
   const pend = dfUsePending(np);
@@ -536,6 +557,15 @@ function DFLikedPage({ np }) {
       pend.set({ uri: t.uri, playing: true });
       dfPlayLiked(t.uri);
     }
+  };
+  const currentIdx = playingUri ? filtered.findIndex((t) => t.uri === playingUri) : -1;
+  const jumpToCurrent = () => {
+    if (currentIdx < 0) return;
+    if (currentIdx >= limit) setLimit(currentIdx + DF_PAGE_STEP);
+    setTimeout(() => {
+      const el = document.querySelector('.df-page--liked .df-row[data-uri="' + playingUri + '"]');
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
   };
 
   return dfH(
@@ -591,7 +621,23 @@ function DFLikedPage({ np }) {
         },
         dfH(DFIcon, { name: "shuffle", size: 26 })
       ),
+      currentIdx >= 0
+        ? dfH("button", { className: "df-chip", onClick: jumpToCurrent, title: "Прокрутить к играющему треку" }, dfH(DFEq), "К играющему")
+        : null,
       dfH("div", { className: "df-actions__spacer" }),
+      dfH(
+        "label",
+        { className: "df-sort", title: "Сортировка" },
+        dfH(
+          "select",
+          { value: sort, onChange: (e) => setSortSaved(e.target.value) },
+          dfH("option", { value: "added" }, "Недавно добавленные"),
+          dfH("option", { value: "title" }, "Название"),
+          dfH("option", { value: "artist" }, "Исполнитель"),
+          dfH("option", { value: "album" }, "Альбом"),
+          dfH("option", { value: "duration" }, "Длительность")
+        )
+      ),
       dfH(
         "label",
         { className: "df-search" },

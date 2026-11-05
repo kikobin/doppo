@@ -547,3 +547,60 @@ button.df-row__heart.is-off { color: rgba(255, 255, 255, 0.45); }
 .df-row { transition: background 0.25s ease; }
 .df-flow, .df-lyrics, .df-page { animation: df-fade-in 0.45s ease both; }
 .df-line-progress__fill, .df-line-progress__knob, .df-pill__fill { transition-duration: 0.3s; transition-timing-function: linear; }
+
+/* =====================================================================
+   Удобство: ссылки, перемотка с подсказкой, подсказки действий
+   ===================================================================== */
+.df-a { color: inherit; text-decoration: none; cursor: pointer; border-radius: 4px; transition: color 0.2s ease, text-decoration-color 0.2s ease; }
+.df-a:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
+.df-a:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+a.df-album { display: block; }
+.df-context .df-a { color: rgba(255, 255, 255, 0.7); font-weight: 700; }
+.df-row__artists { display: inline; }
+.df-row__album .df-a, .df-row__artists .df-a { color: inherit; }
+.df-row__album .df-a:hover, .df-row__artists .df-a:hover { color: #fff; }
+.df-lartist .df-a:hover { color: #fff; }
+
+/* перемотка: линия и время под курсором */
+.df-seek { cursor: pointer; }
+.df-seek__line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, 0.55); pointer-events: none; }
+.df-line-progress .df-seek__line { top: 3px; bottom: 3px; border-radius: 2px; }
+.df-seek__tip {
+  position: absolute; bottom: calc(100% + 8px); transform: translateX(-50%); pointer-events: none; z-index: 5;
+  padding: 4px 8px; border-radius: 8px; background: #fff; color: #0c0c0e;
+  font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4); animation: df-fade-in 0.15s ease both;
+}
+.df-pill.df-seek { overflow: visible; }
+.df-pill__clip { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+
+/* обложка в потоке: «по клику — текст» */
+.df-cover__hint {
+  position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 8px);
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+  background: rgba(12, 12, 14, 0.7); backdrop-filter: blur(12px); color: #fff; font-size: 13px; font-weight: 800;
+  opacity: 0; transition: opacity 0.25s ease, transform 0.35s var(--df-ease); pointer-events: none;
+}
+.df-cover:hover .df-cover__hint { opacity: 1; transform: translate(-50%, 0); }
+
+/* «Мне нравится»: сортировка и «к играющему» */
+.df-chip {
+  all: unset; display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 214, 10, 0.12); color: var(--df-accent); font-size: 13px; font-weight: 800;
+  box-shadow: inset 0 0 0 1px rgba(255, 214, 10, 0.35); transition: background 0.2s ease;
+  animation: df-rise 0.4s var(--df-ease) both;
+}
+.df-chip:hover { background: rgba(255, 214, 10, 0.2); }
+.df-sort { position: relative; display: inline-flex; align-items: center; }
+.df-sort select {
+  appearance: none; -webkit-appearance: none; height: 38px; padding: 0 34px 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.85); font: 700 13px/1 var(--df-font);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: background 0.2s ease;
+}
+.df-sort select:hover { background: rgba(255, 255, 255, 0.1); }
+.df-sort select option { background: #1d1d21; color: #fff; }
+.df-sort::after { content: ""; position: absolute; right: 14px; top: 50%; width: 7px; height: 7px; margin-top: -5px; border-right: 2px solid rgba(255,255,255,.6); border-bottom: 2px solid rgba(255,255,255,.6); transform: rotate(45deg); pointer-events: none; }
+.df-actions { flex-wrap: wrap; row-gap: 12px; }
+
+/* фокус с клавиатуры — везде видно, где ты */
+.df-root button:focus-visible, .df-root [role="button"]:focus-visible, .df-root select:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
