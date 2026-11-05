@@ -1,0 +1,51 @@
+name: Что-то сломалось
+description: Сообщить об ошибке в doppo
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что случилось?
+      description: Что делал, что ожидал и что получилось. Скриншот очень помогает.
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Где
+      options:
+        - Мой поток
+        - Текст песни
+        - Коллекция / «Мне нравится»
+        - Тема (внешний вид Spotify)
+        - Установка
+        - Другое
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Система
+      placeholder: macOS 15 / Windows 11 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: spotify
+    attributes:
+      label: Версия Spotify
+      description: Spotify → меню профиля → «О Spotify»
+    validations:
+      required: true
+  - type: input
+    id: spicetify
+    attributes:
+      label: Версия Spicetify
+      description: Вывод команды `spicetify -v`
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Ошибки из консоли (если есть)
+      description: Ctrl+Shift+I (Windows) или Cmd+Option+I (Mac) в Spotify → вкладка Console. Нужно включить `spicetify enable-devtools`.
+      render: text

@@ -1,20 +1,39 @@
 [
   {
     "name": "doppo",
-    "description": "Тёмная тема в стиле doppo: графит, шрифт Onest, большие скругления, белые кнопки и жёлтый акцент. Ничего не скрывает — только перекрашивает родной интерфейс Spotify.",
+    "description": "Тёмная тема в стиле doppo: графит, шрифт Onest, большие скругления, белые кнопки, жёлтый акцент. Перекрашивает весь Spotify и ничего не скрывает.",
     "preview": "docs/figma-03-search.jpg",
     "readme": "README.md",
     "usercss": "Themes/Doppo/user.css",
     "schemes": "Themes/Doppo/color.ini",
-    "authors": [{ "name": "kikobin", "url": "https://github.com/kikobin" }],
-    "tags": ["dark", "minimal", "russian"]
+    "authors": [
+      {
+        "name": "kikobin",
+        "url": "https://github.com/kikobin"
+      }
+    ],
+    "tags": [
+      "dark",
+      "minimal",
+      "russian"
+    ]
   },
   {
     "name": "doppo · Мой поток",
-    "description": "Приложение «Мой поток»: огромное название трека, обложка в дымке, синхронизированный текст. В комплекте — расширение с блоком навигации doppo и кнопкой в плеере.",
+    "description": "«Мой поток» как «Моя волна» (бесконечный поток под вкус), караоке-текст песен и коллекция в стиле doppo. Установка: curl -fsSL https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.sh | bash (Windows: iwr -useb https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.ps1 | iex)",
     "preview": "docs/figma-01-flow.jpg",
     "readme": "README.md",
-    "authors": [{ "name": "kikobin", "url": "https://github.com/kikobin" }],
-    "tags": ["lyrics", "now playing", "russian"]
+    "authors": [
+      {
+        "name": "kikobin",
+        "url": "https://github.com/kikobin"
+      }
+    ],
+    "tags": [
+      "lyrics",
+      "radio",
+      "now playing",
+      "russian"
+    ]
   }
 ]

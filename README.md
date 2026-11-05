@@ -6,6 +6,27 @@
 
 ![Мой поток](docs/figma-01-flow.jpg)
 
+## Установка в одну команду
+
+Нужен обычный Spotify с сайта spotify.com (не из Microsoft Store) и [Spicetify](https://spicetify.app/docs/getting-started).
+
+**macOS / Linux** — в Терминале:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.sh | bash
+```
+
+**Windows** — в PowerShell:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.ps1 | iex
+```
+
+Этой же командой doppo обновляется. Нет Spicetify? Сначала поставь его
+(`curl -fsSL https://raw.githubusercontent.com/spicetify/cli/main/install.sh | sh` на Mac/Linux,
+`iwr -useb https://raw.githubusercontent.com/spicetify/cli/main/install.ps1 | iex` на Windows),
+перезапусти терминал — и выполни команду выше.
+
 | Текст песни | Поиск |
 |---|---|
 | ![Текст](docs/figma-02-lyrics.jpg) | ![Поиск](docs/figma-03-search.jpg) |
@@ -44,17 +65,11 @@ doppo использует все три — каждое для своей за
 
 ![Как это ложится на Spotify](docs/figma-architecture.jpg)
 
-### «Мой поток»
-
-- Жёлтая плашка, огромное название трека, обложка в анимированной дымке, название альбома.
-- Полоса «артист — трек» показывает прогресс. По клику на неё — перемотка.
-- Лайк (розовое сердце), кнопки «назад / играть / дальше».
-- Кнопка ☰ открывает **текст песни**: обложка и управление слева, синхронизированный текст справа.
-  Активная строка подсвечивается, по клику на строку — перемотка. Текст берётся из LRCLIB, если там нет — из Spotify.
-- Если ничего не играет, ▶ запускает «поток»: перемешанные «Мне нравится».
-- Всё управление идёт через штатный плеер Spotify, поэтому нижний плеер, очередь и устройства остаются синхронными.
-
 ### «Мой поток» — как «Моя волна»
+
+Экран в стиле doppo: жёлтая плашка, огромное название трека, обложка в дымке, полоса «артист — трек»
+(наведи — видно время, клик — перемотка), 👎 и ♡ по бокам, управление и текст песни.
+Всё идёт через штатный плеер Spotify, так что очередь и устройства остаются синхронными.
 
 Бесконечный поток под твой вкус. Нажми «Запустить мой поток» (или выбери режим внизу экрана):
 
@@ -109,26 +124,22 @@ doppo использует все три — каждое для своей за
 | «Мне нравится» в стиле doppo | вкл |
 | Открывать «Мой поток» при запуске | выкл |
 
-## Установка
+## Другие способы установки
 
-1. Установи Spicetify: https://spicetify.app/docs/getting-started
-2. Скачай этот репозиторий.
-3. Запусти установщик из папки репозитория.
+### Из скачанной папки
 
-Windows (PowerShell):
+Скачай [архив](https://github.com/kikobin/doppo/archive/refs/heads/main.zip), распакуй и запусти установщик из папки:
+
+```bash
+bash install.sh
+```
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-macOS / Linux:
-
-```bash
-./install.sh
-```
-
-Установщик копирует тему и приложение в папку Spicetify (это папка, где лежит конфиг из `spicetify -c`),
-включает их и делает `spicetify apply`. Другие твои темы и расширения он не трогает.
+Установщик копирует тему и приложение в папку Spicetify, включает их и делает `spicetify apply`
+(если Spotify обновился — сам делает `spicetify backup apply`). Другие темы и расширения не трогает.
 
 ### Вручную
 
@@ -148,8 +159,8 @@ spicetify apply
 
 ### Через Marketplace
 
-В корне репозитория лежит `manifest.json` в формате Spicetify Marketplace (тема + приложение).
-Чтобы doppo появился в Marketplace, репозиторию нужно добавить GitHub-топики `spicetify-themes` и `spicetify-apps`.
+doppo есть в Spicetify Marketplace. Тема ставится оттуда в один клик, но **приложение** («Мой поток»,
+текст, коллекция) Marketplace ставить не умеет — для него нужна команда из начала README.
 
 ## Настройка внешнего вида
 
@@ -187,3 +198,11 @@ spicetify restore
 
 Если после крупного обновления Spotify какая-то мелочь в теме слетела (радиус, цвет), это чинится
 правкой одного селектора в `user.css`. Функции Spotify от темы не зависят.
+
+## Обратная связь
+
+Нашёл баг или есть идея — [открой issue](https://github.com/kikobin/doppo/issues/new/choose).
+
+## Лицензия
+
+[MIT](LICENSE) © kikobin. doppo не связан со Spotify. Spicetify модифицирует клиент Spotify — используешь на свой страх и риск.

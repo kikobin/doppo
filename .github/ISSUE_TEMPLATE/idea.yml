@@ -1,0 +1,11 @@
+name: Идея
+description: Предложить фичу или улучшение
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Что хочется?
+      description: Опиши идею и зачем она нужна. Можно приложить референс.
+    validations:
+      required: true
