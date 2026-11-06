@@ -277,14 +277,23 @@ async function dfPlayLiked(trackUri, shuffle) {
 function dfAgo(ts) {
   if (!ts) return "";
   const d = (Date.now() - ts) / 86400000;
-  if (d < 1) return "сегодня";
-  if (d < 2) return "вчера";
-  if (d < 7) return Math.floor(d) + " " + dfPlural(Math.floor(d), "день", "дня", "дней") + " назад";
+  if (d < 1) return dfL("сегодня", "today");
+  if (d < 2) return dfL("вчера", "yesterday");
+  if (d < 7) return dfL(dfCount(Math.floor(d), "день", "дня", "дней") + " назад", dfCount(Math.floor(d), "day", "days") + " ago");
   if (d < 31) {
     const w = Math.floor(d / 7);
-    return w + " " + dfPlural(w, "неделю", "недели", "недель") + " назад";
+    return dfL(dfCount(w, "неделю", "недели", "недель") + " назад", dfCount(w, "week", "weeks") + " ago");
   }
-  return new Date(ts).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(ts).toLocaleDateString(dfL("ru-RU", "en-US"), { day: "numeric", month: "short", year: "numeric" });
+}
+
+// «3 трека» / «3 tracks»: для английского — (n, one, many)
+function dfCount(n, a, b, c) {
+  if (DF_LANG !== "ru") return n + " " + (n === 1 ? a : b);
+  return n + " " + dfPlural(n, a, b, c);
+}
+function dfTracks(n) {
+  return DF_LANG === "ru" ? dfCount(n, "трек", "трека", "треков") : dfCount(n, "track", "tracks");
 }
 
 function dfPlural(n, one, few, many) {
@@ -298,7 +307,7 @@ function dfPlural(n, one, few, many) {
 function dfTotal(ms) {
   const m = Math.round(ms / 60000);
   const h = Math.floor(m / 60);
-  return h ? h + " ч " + (m % 60) + " мин" : m + " мин";
+  return h ? h + dfL(" ч ", " h ") + (m % 60) + dfL(" мин", " min") : m + dfL(" мин", " min");
 }
 
 const DF_HEART_ART =
@@ -313,7 +322,7 @@ function DFHeartArt({ size }) {
 }
 
 function DFEq() {
-  return dfH("span", { className: "df-eq", "aria-label": "играет" }, dfH("i"), dfH("i"), dfH("i"));
+  return dfH("span", { className: "df-eq", "aria-label": dfL("играет", "playing") }, dfH("i"), dfH("i"), dfH("i"));
 }
 
 function DFTrackRowView({ t, index, active, playing, onPlay, showAdded, liked, onHeart }) {
@@ -329,7 +338,7 @@ function DFTrackRowView({ t, index, active, playing, onPlay, showAdded, liked, o
       "div",
       { className: "df-row__idx" },
       dfH("span", { className: "df-row__n" }, active && playing ? dfH(DFEq) : index + 1),
-      dfH("button", { className: "df-row__play", onClick: onPlay, title: "Играть" }, dfH(DFIcon, { name: active && playing ? "pause" : "play", size: 16 }))
+      dfH("button", { className: "df-row__play", onClick: onPlay, title: dfL("Играть", "Play") }, dfH(DFIcon, { name: active && playing ? "pause" : "play", size: 16 }))
     ),
     t.cover ? dfH("img", { className: "df-row__cover", src: t.cover, alt: "", loading: "lazy" }) : dfH("div", { className: "df-row__cover" }),
     dfH(
@@ -343,13 +352,13 @@ function DFTrackRowView({ t, index, active, playing, onPlay, showAdded, liked, o
         dfH(DFArtists, { className: "df-row__artists", names: t.artists, uris: t.artistUris })
       )
     ),
-    dfH("div", { className: "df-row__album" }, t.albumUri ? dfH(DFLink, { uri: t.albumUri, title: "Открыть альбом" }, t.album) : t.album),
+    dfH("div", { className: "df-row__album" }, t.albumUri ? dfH(DFLink, { uri: t.albumUri, title: dfL("Открыть альбом", "Open album") }, t.album) : t.album),
     showAdded ? dfH("div", { className: "df-row__added" }, dfAgo(t.addedAt)) : null,
     dfH(
       "button",
       {
         className: "df-row__heart" + (liked === false ? " is-off" : ""),
-        title: liked === false ? "Вернуть в «Мне нравится»" : "Убрать из «Мне нравится»",
+        title: liked === false ? dfL("Вернуть в «Мне нравится»", "Add back to Liked Songs") : dfL("Убрать из «Мне нравится»", "Remove from Liked Songs"),
         onClick: onHeart,
       },
       dfH(DFIcon, { name: "heart", fill: liked !== false, size: 18 })
@@ -370,14 +379,14 @@ function dfUseHearts() {
     });
     try {
       await DFLib.setLiked(t.uri, nowOn);
-      Spicetify.showNotification(nowOn ? "Снова в «Мне нравится»" : "Убрано из «Мне нравится»");
+      Spicetify.showNotification(nowOn ? dfL("Снова в «Мне нравится»", "Back in Liked Songs") : dfL("Убрано из «Мне нравится»", "Removed from Liked Songs"));
     } catch (err) {
       setOff((cur) => {
         const n = new Set(cur);
         nowOn ? n.add(t.uri) : n.delete(t.uri);
         return n;
       });
-      Spicetify.showNotification("Не удалось сохранить. Попробуй ещё раз", true);
+      Spicetify.showNotification(dfL("Не удалось сохранить. Попробуй ещё раз", "Couldn't save. Try again"), true);
     }
   };
   return { isLiked: (t) => !off.has(t.uri), toggle };
@@ -419,7 +428,7 @@ function DFCollectionPage({ np }) {
   return dfH(
     "div",
     { className: "df-page" },
-    dfH("h1", { className: "df-page__title" }, "Моя коллекция"),
+    dfH("h1", { className: "df-page__title" }, dfL("Моя коллекция", "My Collection")),
     dfH(
       "div",
       { className: "df-coll-top" },
@@ -433,14 +442,14 @@ function DFCollectionPage({ np }) {
           dfH(
             "div",
             null,
-            dfH("div", { className: "df-likedcard__title" }, "Мне нравится"),
-            dfH("div", { className: "df-likedcard__sub" }, count == null ? "загружаем…" : count + " " + dfPlural(count, "трек", "трека", "треков"))
+            dfH("div", { className: "df-likedcard__title" }, dfL("Мне нравится", "Liked Songs")),
+            dfH("div", { className: "df-likedcard__sub" }, count == null ? dfL("загружаем…", "loading…") : dfTracks(count))
           ),
           dfH(
             "button",
             {
               className: "df-ctl df-ctl--play df-likedcard__play",
-              title: likedPlaying ? "Пауза" : "Играть «Мне нравится»",
+              title: likedPlaying ? dfL("Пауза", "Pause") : dfL("Играть «Мне нравится»", "Play Liked Songs"),
               onClick: (e) => {
                 e.stopPropagation();
                 if (likedCtx) {
@@ -458,7 +467,7 @@ function DFCollectionPage({ np }) {
       dfH(
         "div",
         { className: "df-coll-recent" },
-        dfH("div", { className: "df-subhead" }, "Недавно понравилось"),
+        dfH("div", { className: "df-subhead" }, dfL("Недавно понравилось", "Recently liked")),
         liked
           ? liked.slice(0, 4).map((t, i) =>
               dfH(DFTrackRow, {
@@ -478,7 +487,7 @@ function DFCollectionPage({ np }) {
     dfH(
       "div",
       { className: "df-sectionhead" },
-      dfH("h2", null, "Мои плейлисты"),
+      dfH("h2", null, dfL("Мои плейлисты", "My playlists")),
       lists ? dfH("span", { className: "df-sectionhead__count" }, lists.length) : null
     ),
     dfH(
@@ -497,7 +506,7 @@ function DFCollectionPage({ np }) {
                   "button",
                   {
                     className: "df-card__play",
-                    title: pend.ctx === p.uri && pend.playing ? "Пауза" : "Играть",
+                    title: pend.ctx === p.uri && pend.playing ? dfL("Пауза", "Pause") : dfL("Играть", "Play"),
                     onClick: (e) => {
                       e.stopPropagation();
                       playCtx(p.uri, () => Spicetify.Player.playUri(p.uri));
@@ -507,7 +516,7 @@ function DFCollectionPage({ np }) {
                 )
               ),
               dfH("div", { className: "df-card__title" }, p.name),
-              dfH("div", { className: "df-card__sub" }, "Плейлист · " + p.count + (p.owner ? " · " + p.owner : ""))
+              dfH("div", { className: "df-card__sub" }, dfL("Плейлист · ", "Playlist · ") + p.count + (p.owner ? " · " + p.owner : ""))
             )
           )
         : [0, 1, 2, 3, 4].map((i) => dfH("div", { key: i, className: "df-card df-card--skeleton" }, dfH("div", { className: "df-card__img" })))
@@ -603,14 +612,14 @@ function DFLikedPage({ np }) {
       dfH(
         "div",
         { className: "df-hero__text" },
-        dfH("div", { className: "df-hero__type" }, "Плейлист"),
-        dfH("h1", { className: "df-hero__title" }, "Мне нравится"),
+        dfH("div", { className: "df-hero__type" }, dfL("Плейлист", "Playlist")),
+        dfH("h1", { className: "df-hero__title" }, dfL("Мне нравится", "Liked Songs")),
         dfH(
           "div",
           { className: "df-hero__meta" },
           user && user.avatar ? dfH("img", { src: user.avatar, alt: "" }) : null,
           user ? dfH("b", null, user.name) : null,
-          all ? dfH("span", null, " · " + all.length + " " + dfPlural(all.length, "трек", "трека", "треков") + (all.length ? ", " + dfTotal(totalMs) : "")) : null
+          all ? dfH("span", null, " · " + dfTracks(all.length) + (all.length ? ", " + dfTotal(totalMs) : "")) : null
         )
       )
     ),
@@ -621,7 +630,7 @@ function DFLikedPage({ np }) {
         "button",
         {
           className: "df-ctl df-ctl--play",
-          title: likedPlaying ? "Пауза" : "Играть",
+          title: likedPlaying ? dfL("Пауза", "Pause") : dfL("Играть", "Play"),
           onClick: () => {
             if (likedCtx) {
               pend.set({ ctx: pend.ctx, playing: !pend.playing });
@@ -638,7 +647,7 @@ function DFLikedPage({ np }) {
         "button",
         {
           className: "df-iconbtn" + (shuffle ? " is-on" : ""),
-          title: shuffle ? "Выключить перемешивание" : "Перемешать",
+          title: shuffle ? dfL("Выключить перемешивание", "Turn off shuffle") : dfL("Перемешать", "Shuffle"),
           onClick: () => {
             Spicetify.Player.setShuffle(!shuffle);
             setShuffle(!shuffle);
@@ -647,30 +656,30 @@ function DFLikedPage({ np }) {
         dfH(DFIcon, { name: "shuffle", size: 26 })
       ),
       currentIdx >= 0
-        ? dfH("button", { className: "df-chip", onClick: jumpToCurrent, title: "Прокрутить к играющему треку" }, dfH(DFEq), "К играющему")
+        ? dfH("button", { className: "df-chip", onClick: jumpToCurrent, title: dfL("Прокрутить к играющему треку", "Scroll to the playing track") }, dfH(DFEq), dfL("К играющему", "Now playing"))
         : null,
       dfH("div", { className: "df-actions__spacer" }),
       dfH(
         "label",
-        { className: "df-sort", title: "Сортировка" },
+        { className: "df-sort", title: dfL("Сортировка", "Sort") },
         dfH(
           "select",
           { value: sort, onChange: (e) => setSortSaved(e.target.value) },
-          dfH("option", { value: "added" }, "Недавно добавленные"),
-          dfH("option", { value: "title" }, "Название"),
-          dfH("option", { value: "artist" }, "Исполнитель"),
-          dfH("option", { value: "album" }, "Альбом"),
-          dfH("option", { value: "duration" }, "Длительность")
+          dfH("option", { value: "added" }, dfL("Недавно добавленные", "Recently added")),
+          dfH("option", { value: "title" }, dfL("Название", "Title")),
+          dfH("option", { value: "artist" }, dfL("Исполнитель", "Artist")),
+          dfH("option", { value: "album" }, dfL("Альбом", "Album")),
+          dfH("option", { value: "duration" }, dfL("Длительность", "Duration"))
         )
       ),
       dfH(
         "label",
         { className: "df-search" },
         dfH(DFIcon, { name: "search", size: 16 }),
-        dfH("input", { value: query, placeholder: "Искать в «Мне нравится»", onChange: (e) => setQuery(e.target.value) }),
-        query ? dfH("button", { className: "df-search__clear", onClick: () => setQuery(""), title: "Очистить" }, "×") : null
+        dfH("input", { value: query, placeholder: dfL("Искать в «Мне нравится»", "Search Liked Songs"), onChange: (e) => setQuery(e.target.value) }),
+        query ? dfH("button", { className: "df-search__clear", onClick: () => setQuery(""), title: dfL("Очистить", "Clear") }, "×") : null
       ),
-      dfH("button", { className: "df-link", onClick: () => History.push("/collection/tracks", { doppoNative: true }), title: "Родная страница Spotify" }, "Открыть в Spotify")
+      dfH("button", { className: "df-link", onClick: () => History.push("/collection/tracks", { doppoNative: true }), title: dfL("Родная страница Spotify", "Native Spotify page") }, dfL("Открыть в Spotify", "Open in Spotify"))
     ),
     dfH(
       "div",
@@ -680,9 +689,9 @@ function DFLikedPage({ np }) {
         { className: "df-row df-row--head" },
         dfH("div", { className: "df-row__idx" }, "#"),
         dfH("div", { className: "df-row__cover df-row__cover--head" }),
-        dfH("div", { className: "df-row__info" }, "Название"),
-        dfH("div", { className: "df-row__album" }, "Альбом"),
-        dfH("div", { className: "df-row__added" }, "Добавлен"),
+        dfH("div", { className: "df-row__info" }, dfL("Название", "Title")),
+        dfH("div", { className: "df-row__album" }, dfL("Альбом", "Album")),
+        dfH("div", { className: "df-row__added" }, dfL("Добавлен", "Added")),
         dfH("div", { className: "df-row__heart" }),
         dfH("div", { className: "df-row__dur" }, dfH(DFIcon, { name: "clock", size: 16 }))
       ),
@@ -700,8 +709,8 @@ function DFLikedPage({ np }) {
         })
       ),
       !all ? [0, 1, 2, 3, 4, 5, 6, 7].map((i) => dfH("div", { key: "s" + i, className: "df-row df-row--skeleton" })) : null,
-      all && !all.length ? dfH("div", { className: "df-emptyrow" }, "Здесь появятся треки, которые тебе нравятся") : null,
-      all && all.length && !filtered.length ? dfH("div", { className: "df-emptyrow" }, "Ничего не нашлось по «" + query + "»") : null,
+      all && !all.length ? dfH("div", { className: "df-emptyrow" }, dfL("Здесь появятся треки, которые тебе нравятся", "Songs you like will show up here")) : null,
+      all && all.length && !filtered.length ? dfH("div", { className: "df-emptyrow" }, dfL("Ничего не нашлось по «" + query + "»", "Nothing found for “" + query + "”")) : null,
       dfH("div", { ref: sentinel, style: { height: 1 } })
     )
   );

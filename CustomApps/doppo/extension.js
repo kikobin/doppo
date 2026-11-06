@@ -29,7 +29,17 @@
   const ROUTE = "/doppo";
   const KEY = "doppo:settings";
   const History = Spicetify.Platform.History;
-  const ru = !Spicetify.Locale || String(Spicetify.Locale.getLocale() || "ru").startsWith("ru");
+  // язык как в приложении: русский Spotify → русский, иначе английский
+  const ru = (() => {
+    try {
+      const forced = localStorage.getItem("doppo:lang");
+      if (forced === "ru" || forced === "en") return forced === "ru";
+      const loc = (Spicetify.Locale && Spicetify.Locale.getLocale && Spicetify.Locale.getLocale()) || navigator.language || "en";
+      return /^(ru|be|kk)/i.test(loc);
+    } catch (e) {
+      return false;
+    }
+  })();
   const T = ru
     ? {
         flow: "Мой поток",

@@ -577,7 +577,7 @@ function DFKaraokeView({ data, focus, onSeek }) {
         );
       })
     ),
-    manual ? h("button", { className: "dfk-now", onClick: backToNow }, "↓ К текущей строке") : null
+    manual ? h("button", { className: "dfk-now", onClick: backToNow }, dfL("↓ К текущей строке", "↓ Back to current line")) : null
   );
 }
 
@@ -590,7 +590,7 @@ function DFPlainLyricsView({ data }) {
   return h(
     "div",
     { className: "dfk-plain" },
-    h("div", { className: "dfk-plain__note" }, "Текст без синхронизации"),
+    h("div", { className: "dfk-plain__note" }, dfL("Текст без синхронизации", "Unsynced lyrics")),
     data.lines.map((l, i) => h("p", { key: i, className: l.text ? "" : "is-gap" }, l.text || " "))
   );
 }
@@ -649,7 +649,7 @@ function DFLiveLineView({ data, onOpen }) {
 
   return h(
     "button",
-    { className: "dfl", onClick: onOpen, title: "Открыть текст" },
+    { className: "dfl", onClick: onOpen, title: dfL("Открыть текст", "Open lyrics") },
     body,
     h("div", { className: "dfl-next", key: "n" + active }, next ? next.text : " ")
   );

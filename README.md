@@ -1,8 +1,12 @@
 # doppo для Spotify
 
+[English version](README.en.md)
+
 Набор для [Spicetify](https://github.com/spicetify/cli), который делает Spotify похожим на doppo:
 тёмный графит, жирный шрифт [Onest](https://fonts.google.com/specimen/Onest), большие скругления,
 белые кнопки, жёлтый акцент — и отдельный экран **«Мой поток»** с дымкой вокруг обложки и крупным текстом песни.
+
+Язык интерфейса — как у Spotify: русский Spotify → русский doppo, любой другой → английский.
 
 ![Мой поток](docs/figma-01-flow.jpg)
 

@@ -6,6 +6,22 @@
 // поэтому нижний плеер, очередь, устройства и т.д. продолжают работать.
 
 const dfReact = Spicetify.React;
+
+// Язык: русский интерфейс Spotify → русский doppo, иначе английский.
+// Можно переопределить: localStorage["doppo:lang"] = "ru" | "en".
+const DF_LANG = (() => {
+  try {
+    const forced = localStorage.getItem("doppo:lang");
+    if (forced === "ru" || forced === "en") return forced;
+    const loc = (Spicetify.Locale && Spicetify.Locale.getLocale && Spicetify.Locale.getLocale()) || navigator.language || "en";
+    return /^(ru|be|kk)/i.test(loc) ? "ru" : "en";
+  } catch (e) {
+    return "en";
+  }
+})();
+function dfL(ru, en) {
+  return DF_LANG === "ru" ? ru : en;
+}
 const dfH = dfReact.createElement;
 const { useState: dfUseState, useEffect: dfUseEffect, useRef: dfUseRef, useCallback: dfUseCallback } = dfReact;
 
@@ -123,7 +139,7 @@ function dfUseNowPlaying() {
     } catch (e) {
       likeHold.current = 0;
       setState((s) => ({ ...s, liked: !next }));
-      Spicetify.showNotification("Не удалось сохранить. Попробуй ещё раз", true);
+      Spicetify.showNotification(dfL("Не удалось сохранить. Попробуй ещё раз", "Couldn't save. Try again"), true);
     }
   }, []);
   dfIsLikedNow.current = state.liked;
@@ -318,12 +334,12 @@ function DFControls({ playing, hasTrack, big, left, right }) {
     "div",
     { className: "df-controls" + (big ? " df-controls--big" : "") },
     left !== undefined ? dfH("div", { className: "df-controls__slot" }, left) : null,
-    dfH("button", { className: "df-ctl", title: "Назад", onClick: () => Spicetify.Player.back() }, dfH(DFIcon, { name: "prev", size: 20 })),
+    dfH("button", { className: "df-ctl", title: dfL("Назад", "Previous"), onClick: () => Spicetify.Player.back() }, dfH(DFIcon, { name: "prev", size: 20 })),
     dfH(
       "button",
       {
         className: "df-ctl df-ctl--play",
-        title: shown ? "Пауза" : "Играть",
+        title: shown ? dfL("Пауза", "Pause") : dfL("Играть", "Play"),
         onClick: () => {
           setShown(!shown);
           hasTrack ? Spicetify.Player.togglePlay() : dfStartFlow();
@@ -331,7 +347,7 @@ function DFControls({ playing, hasTrack, big, left, right }) {
       },
       dfH(DFIcon, { name: shown ? "pause" : "play", size: 24 })
     ),
-    dfH("button", { className: "df-ctl", title: "Дальше", onClick: () => Spicetify.Player.next() }, dfH(DFIcon, { name: "next", size: 20 })),
+    dfH("button", { className: "df-ctl", title: dfL("Дальше", "Next"), onClick: () => Spicetify.Player.next() }, dfH(DFIcon, { name: "next", size: 20 })),
     right !== undefined ? dfH("div", { className: "df-controls__slot" }, right) : null
   );
 }
@@ -339,7 +355,7 @@ function DFControls({ playing, hasTrack, big, left, right }) {
 function DFHeart({ liked, onClick }) {
   return dfH(
     "button",
-    { className: "df-heart" + (liked ? " is-liked" : ""), title: liked ? "Убрать из «Мне нравится»" : "Мне нравится", onClick },
+    { className: "df-heart" + (liked ? " is-liked" : ""), title: liked ? dfL("Убрать из «Мне нравится»", "Remove from Liked Songs") : dfL("Мне нравится", "Save to Liked Songs"), onClick },
     dfH(DFIcon, { name: "heart", fill: liked, size: 22 })
   );
 }
@@ -485,12 +501,12 @@ function DFUpNext({ next, flow }) {
   if (!next) return null;
   return dfH(
     "button",
-    { className: "df-upnext", key: next.uri, onClick: () => Spicetify.Player.next(), title: "Включить следующий" },
+    { className: "df-upnext", key: next.uri, onClick: () => Spicetify.Player.next(), title: dfL("Включить следующий", "Play next track") },
     next.cover ? dfH("img", { src: next.cover, alt: "" }) : null,
     dfH(
       "div",
       { className: "df-upnext__text" },
-      dfH("small", null, flow && flow.active ? "Дальше в потоке" : "Дальше"),
+      dfH("small", null, flow && flow.active ? dfL("Дальше в потоке", "Up next in flow") : dfL("Дальше", "Up next")),
       dfH("b", null, next.title),
       dfH("span", null, next.artist)
     )
@@ -530,9 +546,9 @@ function dfUseFlow() {
 }
 
 const DF_MODES = [
-  ["vibe", "Под вайб"],
-  ["fav", "Любимое"],
-  ["fresh", "Незнакомое"],
+  ["vibe", dfL("Под вайб", "Vibe")],
+  ["fav", dfL("Любимое", "Favorites")],
+  ["fresh", dfL("Незнакомое", "Discover")],
 ];
 
 /* ------------------------------------------------------------------ */
@@ -579,7 +595,7 @@ function DFArtists({ names, uris, className }) {
         Spicetify.React.Fragment,
         { key: i },
         i ? ", " : null,
-        uris && uris[i] ? dfH(DFLink, { uri: uris[i], title: "Открыть исполнителя" }, n) : n
+        uris && uris[i] ? dfH(DFLink, { uri: uris[i], title: dfL("Открыть исполнителя", "Open artist") }, n) : n
       )
     )
   );
@@ -627,32 +643,32 @@ function DFFlowView({ np, progress, lyrics, onLyrics, flow }) {
   const activeMode = pendingMode || (flow.active ? flow.mode : null);
   const t = np.track;
   const pct = t && t.duration ? Math.min(100, (progress / t.duration) * 100) : 0;
-  const title = t ? t.title : "Мой поток";
+  const title = t ? t.title : dfL("Мой поток", "My Flow");
   const titleSize = title.length > 26 ? "df-title--s" : title.length > 14 ? "df-title--m" : "";
 
   return dfH(
     "div",
     { className: "df-flow" },
     flow.active || pendingMode
-      ? dfH("div", { className: "df-badge is-live", title: "Поток играет" }, dfH("i", { className: "df-badge__dot" }), "Мой поток")
+      ? dfH("div", { className: "df-badge is-live", title: dfL("Поток играет", "Flow is playing") }, dfH("i", { className: "df-badge__dot" }), dfL("Мой поток", "My Flow"))
       : dfH(
           "button",
-          { className: "df-badge df-badge--start", onClick: () => startMode(flow.mode || "vibe"), title: "Запустить бесконечный поток под твой вкус" },
+          { className: "df-badge df-badge--start", onClick: () => startMode(flow.mode || "vibe"), title: dfL("Запустить бесконечный поток под твой вкус", "Start an endless flow tuned to your taste") },
           dfH(DFIcon, { name: "play", size: 14 }),
-          "Запустить мой поток"
+          dfL("Запустить мой поток", "Start My Flow")
         ),
     dfH("h1", { className: "df-title " + titleSize, title }, title),
     dfH(
       "div",
-      { className: "df-cover" + (np.playing ? " is-playing" : ""), onClick: t ? onLyrics : undefined, title: t ? "Открыть текст" : "" },
+      { className: "df-cover" + (np.playing ? " is-playing" : ""), onClick: t ? onLyrics : undefined, title: t ? dfL("Открыть текст", "Open lyrics") : "" },
       t && t.cover
         ? dfH("img", { src: t.cover, alt: "", draggable: false, key: t.cover })
         : dfH("div", { className: "df-cover__empty" }, dfH(DFIcon, { name: "play", size: 64 })),
-      t ? dfH("div", { className: "df-cover__hint" }, dfH(DFIcon, { name: "lyrics", size: 22 }), "Текст") : null
+      t ? dfH("div", { className: "df-cover__hint" }, dfH(DFIcon, { name: "lyrics", size: 22 }), dfL("Текст", "Lyrics")) : null
     ),
     t && t.albumUri
-      ? dfH(DFLink, { className: "df-album", uri: t.albumUri, title: "Открыть альбом" }, t.album)
-      : dfH("div", { className: "df-album" }, t ? t.album : "Включи что-нибудь — и поток подхватит"),
+      ? dfH(DFLink, { className: "df-album", uri: t.albumUri, title: dfL("Открыть альбом", "Open album") }, t.album)
+      : dfH("div", { className: "df-album" }, t ? t.album : dfL("Включи что-нибудь — и поток подхватит", "Play something and the flow will pick it up")),
     dfH(
       "div",
       { className: "df-barrow" },
@@ -660,7 +676,7 @@ function DFFlowView({ np, progress, lyrics, onLyrics, flow }) {
         "button",
         {
           className: "df-side",
-          title: "Не нравится — пропустить и больше не предлагать",
+          title: dfL("Не нравится — пропустить и больше не предлагать", "Dislike: skip and never suggest again"),
           onClick: () => (window.doppoFlow ? window.doppoFlow.dislike() : Spicetify.Player.next()),
           disabled: !t,
         },
@@ -670,7 +686,7 @@ function DFFlowView({ np, progress, lyrics, onLyrics, flow }) {
         DFSeekable,
         { className: "df-pill", duration: t && t.duration },
         dfH("div", { className: "df-pill__clip" }, dfH("div", { className: "df-pill__fill", style: { width: pct + "%" } })),
-        dfH("div", { className: "df-pill__text" }, t ? (t.artists.join(", ") || "—") + " — " + t.title : "Нажми ▶ чтобы запустить поток")
+        dfH("div", { className: "df-pill__text" }, t ? (t.artists.join(", ") || "—") + " — " + t.title : dfL("Нажми ▶ чтобы запустить поток", "Press ▶ to start the flow"))
       ),
       dfH(DFHeart, { liked: np.liked, onClick: np.toggleLike })
     ),
@@ -678,12 +694,12 @@ function DFFlowView({ np, progress, lyrics, onLyrics, flow }) {
       playing: np.playing,
       hasTrack: !!t,
       big: true,
-      left: dfH("button", { className: "df-ctl df-ctl--small", title: "Текст песни", onClick: onLyrics, disabled: !t }, dfH(DFIcon, { name: "lyrics", size: 18 })),
+      left: dfH("button", { className: "df-ctl df-ctl--small", title: dfL("Текст песни", "Lyrics"), onClick: onLyrics, disabled: !t }, dfH(DFIcon, { name: "lyrics", size: 18 })),
       right: dfH("span", { className: "df-ctl df-ctl--small df-ctl--ghost" }),
     }),
     dfH(
       "div",
-      { className: "df-modes", role: "tablist", "aria-label": "Режим потока" },
+      { className: "df-modes", role: "tablist", "aria-label": dfL("Режим потока", "Flow mode") },
       DF_MODES.map(([m, label]) =>
         dfH(
           "button",
@@ -693,7 +709,7 @@ function DFFlowView({ np, progress, lyrics, onLyrics, flow }) {
             "aria-selected": activeMode === m,
             className: "df-mode" + (activeMode === m ? " is-on" : ""),
             onClick: () => startMode(m),
-            title: { vibe: "Новое рядом с тем, что тебе нравится", fav: "Твои лайки вперемешку", fresh: "Только то, чего нет в твоих лайках" }[m],
+            title: { vibe: dfL("Новое рядом с тем, что тебе нравится", "New music close to what you like"), fav: dfL("Твои лайки вперемешку", "Your liked songs, shuffled"), fresh: dfL("Только то, чего нет в твоих лайках", "Only songs you haven't liked yet") }[m],
           },
           label
         )
@@ -718,13 +734,13 @@ function DFLyricsPanel({ track, lyrics, focus }) {
     return dfH(
       "div",
       { className: "dfk-empty" },
-      dfH("b", null, "Тут без слов"),
-      dfH("span", null, "Ни Musixmatch, ни Spotify, ни LRCLIB не знают текст этого трека")
+      dfH("b", null, dfL("Тут без слов", "No lyrics here")),
+      dfH("span", null, dfL("Ни Musixmatch, ни Spotify, ни LRCLIB не знают текст этого трека", "Musixmatch, Spotify and LRCLIB don't have lyrics for this track"))
     );
   }
   const data = lyrics.data;
   if (data.kind === "instrumental") {
-    return dfH("div", { className: "dfk-empty" }, dfH("b", null, "♪ Инструментал"), dfH("span", null, "Просто слушай"));
+    return dfH("div", { className: "dfk-empty" }, dfH("b", null, dfL("♪ Инструментал", "♪ Instrumental")), dfH("span", null, dfL("Просто слушай", "Just listen")));
   }
   if (data.kind === "plain") return dfH(DFPlainLyrics, { data, key: track.uri });
   return dfH(DFKaraoke, { data, focus, key: track.uri, onSeek: (ms) => DFClock.seek(ms) });
@@ -743,7 +759,7 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
       if (e.key !== "[" && e.key !== "]") return;
       const v = dfLyricsOffset() + (e.key === "]" ? 100 : -100);
       dfSetLyricsOffset(v);
-      setOffsetHint((v > 0 ? "+" : "") + (v / 1000).toFixed(1) + " с");
+      setOffsetHint((v > 0 ? "+" : "") + (v / 1000).toFixed(1) + dfL(" с", " s"));
       clearTimeout(hintTimer.current);
       hintTimer.current = setTimeout(() => setOffsetHint(null), 1400);
     };
@@ -763,7 +779,7 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
     dfH(
       "div",
       { className: "df-lyrics__left" },
-      dfH("button", { className: "df-back", onClick: onBack }, dfH(DFIcon, { name: "back", size: 18 }), "Назад"),
+      dfH("button", { className: "df-back", onClick: onBack }, dfH(DFIcon, { name: "back", size: 18 }), dfL("Назад", "Back")),
       dfH("div", { className: "df-lcover" }, t.cover ? dfH("img", { src: t.cover, alt: "", draggable: false, key: t.cover }) : null),
       dfH(
         "div",
@@ -786,17 +802,17 @@ function DFLyricsView({ np, progress, lyrics, focus, onBack, onFocus }) {
       focus
         ? dfH("div", { className: "df-lyrics__ctx" }, dfH("b", null, t.title), dfH("small", null, t.artists.join(", ")))
         : t.context
-        ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, "Играет из"), dfH("b", null, t.context))
+        ? dfH("div", { className: "df-lyrics__ctx" }, dfH("small", null, dfL("Играет из", "Playing from")), dfH("b", null, t.context))
         : null,
       dfH("div", { className: "df-lyrics__body" }, dfH(DFLyricsPanel, { track: t, lyrics, focus })),
       dfH(
         "div",
         { className: "df-lyrics__foot" },
-        dfH("span", { className: "df-lyrics__src" }, offsetHint ? "Сдвиг текста " + offsetHint : source ? "Текст · " + source : ""),
+        dfH("span", { className: "df-lyrics__src" }, offsetHint ? dfL("Сдвиг текста ", "Lyrics offset ") + offsetHint : source ? dfL("Текст · ", "Lyrics · ") + source : ""),
         canFocus
           ? dfH(
               "button",
-              { className: "df-focusbtn" + (focus ? " is-on" : ""), onClick: onFocus, title: focus ? "Обычный вид (F)" : "Сцена — только текст (F)" },
+              { className: "df-focusbtn" + (focus ? " is-on" : ""), onClick: onFocus, title: focus ? dfL("Обычный вид (F)", "Normal view (F)") : dfL("Сцена — только текст (F)", "Stage: lyrics only (F)") },
               dfH(DFIcon, { name: focus ? "unfocus" : "focus", size: 16 })
             )
           : null

@@ -22,10 +22,21 @@
 
   const STATE_KEY = "doppo:flow";
   const DIS_KEY = "doppo:flow-dislikes";
+  const RU = (() => {
+    try {
+      const forced = localStorage.getItem("doppo:lang");
+      if (forced === "ru" || forced === "en") return forced === "ru";
+      const loc = (Spicetify.Locale && Spicetify.Locale.getLocale && Spicetify.Locale.getLocale()) || navigator.language || "en";
+      return /^(ru|be|kk)/i.test(loc);
+    } catch (e) {
+      return false;
+    }
+  })();
+  const L = (ru, en) => (RU ? ru : en);
   const MODES = {
-    vibe: "Под вайб",
-    fav: "Любимое",
-    fresh: "Незнакомое",
+    vibe: L("Под вайб", "Vibe"),
+    fav: L("Любимое", "Favorites"),
+    fresh: L("Незнакомое", "Discover"),
   };
 
   const read = (k, d) => {
@@ -176,7 +187,7 @@
         if (!user) throw new Error("no user");
         Spicetify.Player.setShuffle(true);
         await Spicetify.Player.playUri("spotify:user:" + user + ":collection");
-        note("Мой поток · " + MODES.fav);
+        note(L("Мой поток · ", "My Flow · ") + MODES.fav);
         return;
       }
 
@@ -199,12 +210,12 @@
       else await Spicetify.Player.playUri(radio);
       save();
       emit();
-      note("Мой поток · " + MODES[mode]);
+      note(L("Мой поток · ", "My Flow · ") + MODES[mode]);
     } catch (e) {
       state.active = false;
       save();
       emit();
-      note("Не получилось запустить поток", true);
+      note(L("Не получилось запустить поток", "Couldn't start the flow"), true);
     } finally {
       busy = false;
     }
@@ -349,7 +360,7 @@
     saveDis();
     if (last && last.uri === cur.uri) last.ours = false; // не считать как «быстро пропустил» повторно
     Spicetify.Player.next();
-    note("Понял — такое больше не предложу");
+    note(L("Понял — такое больше не предложу", "Got it, won't suggest this again"));
   }
 
   Spicetify.Player.addEventListener("songchange", onSong);
@@ -385,7 +396,7 @@
       state.good = [];
       saveDis();
       save();
-      note("Вкус потока сброшен");
+      note(L("Вкус потока сброшен", "Flow taste reset"));
     },
   };
   emit();

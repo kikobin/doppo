@@ -1,7 +1,7 @@
 [
   {
     "name": "doppo",
-    "description": "Тёмная тема в стиле doppo: графит, шрифт Onest, большие скругления, белые кнопки, жёлтый акцент. Перекрашивает весь Spotify и ничего не скрывает.",
+    "description": "doppo-style dark theme: graphite, Onest typeface, big rounded corners, white buttons, yellow accent. Restyles all of Spotify and hides nothing. RU/EN.",
     "preview": "docs/figma-03-search.jpg",
     "readme": "README.md",
     "usercss": "Themes/Doppo/user.css",
@@ -15,14 +15,15 @@
     "tags": [
       "dark",
       "minimal",
-      "russian"
+      "russian",
+      "english"
     ]
   },
   {
     "name": "doppo · Мой поток",
-    "description": "«Мой поток» как «Моя волна» (бесконечный поток под вкус), караоке-текст песен и коллекция в стиле doppo. Установка: curl -fsSL https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.sh | bash (Windows: iwr -useb https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.ps1 | iex)",
+    "description": "My Flow: an endless radio tuned to your taste, karaoke lyrics and a doppo-style collection. Install: curl -fsSL https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.sh | bash  (Windows: iwr -useb https://raw.githubusercontent.com/kikobin/doppo/main/remote-install.ps1 | iex). RU/EN.",
     "preview": "docs/figma-01-flow.jpg",
-    "readme": "README.md",
+    "readme": "README.en.md",
     "authors": [
       {
         "name": "kikobin",
@@ -33,6 +34,7 @@
       "lyrics",
       "radio",
       "now playing",
+      "english",
       "russian"
     ]
   }
